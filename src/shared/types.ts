@@ -67,6 +67,35 @@ export type StartGameResult =
   | { ok: false; error: 'NOT_HOST' | 'NEED_FOUR' };
 
 // =========================================================================
+// Cards
+// =========================================================================
+
+export type Suit = 'hearts' | 'diamonds' | 'clubs' | 'spades';
+export type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
+
+export interface Card {
+  suit: Suit;
+  rank: Rank;
+}
+
+export const SUITS: ReadonlyArray<Suit> = ['hearts', 'diamonds', 'clubs', 'spades'];
+export const RANKS: ReadonlyArray<Rank> = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+/** Point value of a card. 5s=5, 10s=10, Aces=15, Queen of Spades=30, else 0. */
+export function pointValue(card: Card): number {
+  if (card.rank === '5') return 5;
+  if (card.rank === '10') return 10;
+  if (card.rank === 'A') return 15;
+  if (card.suit === 'spades' && card.rank === 'Q') return 30;
+  return 0;
+}
+
+/** Stable string key for a card. */
+export function cardKey(card: Card): string {
+  return `${card.rank}-${card.suit}`;
+}
+
+// =========================================================================
 // Constants
 // =========================================================================
 
