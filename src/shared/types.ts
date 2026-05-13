@@ -211,16 +211,20 @@ export interface GameState {
   revealedPartnerSeat: Seat | null;
 }
 
+/** Wire-format game state (no partnerSeat). */
+export type PublicGameState = Omit<GameState, 'partnerSeat'>;
+
 /**
  * Wire format sent to clients. Extends Room (public state) with optional `game`.
  * No `hands` field — those are per-player private and emitted via hand:update.
  */
 export interface RoomView extends Room {
-  game: GameState | null;
+  game: PublicGameState | null;
 }
 
 /** Server-internal: full Room state including private hands. */
-export interface RoomServerState extends RoomView {
+export interface RoomServerState extends Room {
+  game: GameState | null;
   /** Server-only. Each player's 13 cards. Never broadcast directly. */
   hands: Record<Seat, Card[]> | null;
 }
