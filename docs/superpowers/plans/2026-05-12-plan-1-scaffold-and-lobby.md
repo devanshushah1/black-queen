@@ -108,23 +108,23 @@ Create `package.json`:
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "next": "14.2.5",
+    "next": "14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "socket.io": "4.7.5",
-    "socket.io-client": "4.7.5",
+    "socket.io": "4.8.3",
+    "socket.io-client": "4.8.3",
     "zustand": "4.5.4"
   },
   "devDependencies": {
-    "@playwright/test": "1.45.3",
+    "@playwright/test": "1.60.0",
     "@types/node": "20.14.10",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "@vitejs/plugin-react": "4.3.1",
     "autoprefixer": "10.4.19",
     "eslint": "8.57.0",
-    "eslint-config-next": "14.2.5",
-    "postcss": "8.4.39",
+    "eslint-config-next": "14.2.35",
+    "postcss": "8.5.14",
     "prettier": "3.3.3",
     "tailwindcss": "3.4.6",
     "tsx": "4.16.2",
@@ -842,7 +842,7 @@ describe('leaveRoom', () => {
 
     const res = leaveRoom({ code: room.code, sessionId: join.sessionId });
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || res.wasLastPlayer) return;
     expect(res.room.players.map((p) => p.name)).toEqual(['Dev', 'Riya']);
     expect(res.room.players.map((p) => p.seat)).toEqual([1, 2]);
   });
@@ -854,7 +854,7 @@ describe('leaveRoom', () => {
 
     const res = leaveRoom({ code: room.code, sessionId: hostId });
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || res.wasLastPlayer) return;
     expect(res.room.hostId).toBe(join.sessionId);
   });
 
@@ -877,7 +877,7 @@ describe('leaveRoom', () => {
     if (!join.ok) throw new Error('precondition');
     const res = leaveRoom({ code: room.code, sessionId: join.sessionId });
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || res.wasLastPlayer) return;
     const last = res.room.chat[res.room.chat.length - 1];
     expect(last.text).toMatch(/Sam left/);
   });
@@ -2786,7 +2786,10 @@ test('host creates a room, three guests join via link, host starts the game', as
   const code = roomUrl.match(/\/room\/([A-Z]{4})/)![1];
 
   // Host sees their own seat with host badge.
-  await expect(host.getByText('Dev')).toBeVisible();
+  // Note: 'Dev' also appears in a chat message ("Dev created the room"), so we
+  // use exact match + .first() to pin to the seat label and avoid strict-mode
+  // violations (the chat span uses exact text 'Dev created the room', not 'Dev').
+  await expect(host.getByText('Dev', { exact: true }).first()).toBeVisible();
   await expect(host.getByText(/★ host/i)).toBeVisible();
 
   // Guests join via the room URL.
