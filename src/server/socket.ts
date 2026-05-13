@@ -12,6 +12,7 @@ import {
   chooseTrumpPartnerInRoom,
   playCardInRoom,
   playAgainInRoom,
+  resumeInRoom,
 } from './rooms';
 import { toRoomView } from './game/view';
 import type {
@@ -167,6 +168,25 @@ export function attachSocketHandlers(io: Srv): void {
       const res = playAgainInRoom({ code: roomCode, sessionId });
       if (!res.ok) { cb({ ok: false, error: res.error }); return; }
       cb({ ok: true });
+      broadcastState(io, res.room);
+    });
+
+    socket.on('session:resume', ({ sessionId, code }, cb) => {
+      const res = resumeInRoom({ code, sessionId });
+      if (!res.ok) { cb({ ok: false, error: res.error }); return; }
+      // Bind this socket to the resumed session
+      socket.data.sessionId = sessionId;
+      socket.data.roomCode = code;
+      socket.join(roomChannel(code));
+      cb({ ok: true, sessionId, room: toRoomView(res.room) });
+      // Re-emit the player's hand if game is in progress
+      if (res.room.hands) {
+        const player = res.room.players.find((p) => p.id === sessionId);
+        if (player) {
+          socket.emit('hand:update', { hand: res.room.hands[player.seat] });
+        }
+      }
+      // Broadcast room state so other clients see the reconnect
       broadcastState(io, res.room);
     });
 
