@@ -1,41 +1,75 @@
 import { CardBack } from './CardBack';
 
 interface Props {
-  /** Number of cards in the opponent's hand. */
   count: number;
-  /** 'top' fans down, 'left' fans right (rotated), 'right' fans left (rotated). */
   orientation: 'top' | 'left' | 'right';
 }
 
 export function OpponentFan({ count, orientation }: Props) {
   if (count <= 0) return null;
-  const cards = Array.from({ length: count });
 
   if (orientation === 'top') {
-    const spread = Math.min(2, 18 / Math.max(count - 1, 1));
-    return (
-      <div className="flex justify-center items-end">
-        {cards.map((_, i) => {
-          const offsetFromCenter = i - (count - 1) / 2;
-          const rot = offsetFromCenter * spread;
-          return (
-            <div key={i} style={{ marginLeft: i === 0 ? 0 : '-12px', transform: `rotate(${rot}deg)`, transformOrigin: 'bottom center' }}>
-              <CardBack size="sm" />
-            </div>
-          );
-        })}
-      </div>
-    );
+    return <OpponentFanHorizontal count={count} />;
   }
+  return <OpponentFanVertical count={count} side={orientation} />;
+}
 
-  const baseRot = orientation === 'left' ? 90 : -90;
+function OpponentFanHorizontal({ count }: { count: number }) {
+  const cards = Array.from({ length: count });
+  const maxRot = 11;                                  // ~22° total spread
+  const step = count > 1 ? (maxRot * 2) / (count - 1) : 0;
   return (
-    <div className="flex flex-col justify-center items-center">
-      {cards.map((_, i) => (
-        <div key={i} style={{ marginTop: i === 0 ? 0 : '-10px', transform: `rotate(${baseRot}deg)` }}>
-          <CardBack size="sm" />
-        </div>
-      ))}
+    <div className="relative w-[260px] h-[80px]" data-testid="opponent-fan-top">
+      {cards.map((_, i) => {
+        const rot = -maxRot + step * i;
+        const offsetX = (i - (count - 1) / 2) * 12;   // overlap step
+        return (
+          <div
+            key={i}
+            className="absolute left-1/2 top-0"
+            style={{
+              transform: `translateX(${offsetX - 22}px) rotate(${rot}deg)`,
+              transformOrigin: 'bottom center',
+            }}
+          >
+            <CardBack size="md" />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OpponentFanVertical({ count, side }: { count: number; side: 'left' | 'right' }) {
+  const cards = Array.from({ length: count });
+  const maxRot = 11;                                  // ~22° spread
+  const step = count > 1 ? (maxRot * 2) / (count - 1) : 0;
+  // baseRot rotates the whole card 90° so its long edge runs vertical.
+  // Then per-card delta bows outward (positive on right side, negative on left).
+  const baseRot = side === 'left' ? 90 : -90;
+  const direction = side === 'left' ? 1 : -1;
+  return (
+    <div
+      className="relative w-[80px] h-[260px]"
+      data-testid={`opponent-fan-${side}`}
+    >
+      {cards.map((_, i) => {
+        const delta = -maxRot + step * i;
+        const rot = baseRot + delta * direction;
+        const offsetY = (i - (count - 1) / 2) * 12;   // overlap step along the side
+        return (
+          <div
+            key={i}
+            className="absolute left-0 top-1/2"
+            style={{
+              transform: `translateY(${offsetY - 31}px) rotate(${rot}deg)`,
+              transformOrigin: side === 'left' ? 'left center' : 'right center',
+            }}
+          >
+            <CardBack size="md" />
+          </div>
+        );
+      })}
     </div>
   );
 }
