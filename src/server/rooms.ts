@@ -325,6 +325,31 @@ export function chooseTrumpPartnerInRoom(input: {
   return { ok: true, room };
 }
 
+type PlayAgainInRoomResult =
+  | { ok: true; room: RoomServerState }
+  | { ok: false; error: 'NOT_HOST' | 'NOT_IN_END' };
+
+export function playAgainInRoom(input: { code: string; sessionId: string }): PlayAgainInRoomResult {
+  const room = rooms.get(input.code);
+  if (!room) return { ok: false, error: 'NOT_HOST' }; // treat unknown as not-host
+  if (room.hostId !== input.sessionId) return { ok: false, error: 'NOT_HOST' };
+  if (room.phase !== 'end') return { ok: false, error: 'NOT_IN_END' };
+
+  // Reset to lobby state — keep players + seats + chat.
+  room.phase = 'lobby';
+  room.game = null;
+  room.hands = null;
+  room.chat.push({
+    id: randomUUID(),
+    authorId: null,
+    authorName: null,
+    text: 'New game starting…',
+    ts: Date.now(),
+  });
+
+  return { ok: true, room };
+}
+
 type PlayCardInRoomResult =
   | { ok: true; room: RoomServerState }
   | { ok: false; error: 'NOT_YOUR_TURN' | 'NOT_IN_HAND' | 'MUST_FOLLOW_SUIT' | 'NOT_IN_GAME' };
@@ -381,6 +406,12 @@ export function playCardInRoom(input: { code: string; seat: Seat; card: Card }):
     room.game.completedTricks.push(finished);
 
     if (room.game.completedTricks.length === 13) {
+      // Defensive: by 13 tricks the called card must have been played, but ensure
+      // the public projection has the partner seat set in case logic upstream
+      // changes.
+      if (room.game.revealedPartnerSeat === null) {
+        room.game.revealedPartnerSeat = room.game.partnerSeat;
+      }
       room.phase = 'end';
       room.game.currentTrick = null;
     } else {

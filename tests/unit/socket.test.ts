@@ -479,3 +479,30 @@ describe('socket: card:play', () => {
     clients.forEach((c) => c.disconnect());
   });
 });
+
+describe('socket: room:play-again', () => {
+  it('rejects non-host with NOT_HOST', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2] = clients;
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const code = created.room.code;
+    await new Promise<void>((resolve) => c2.emit('room:join', { code, name: 'Sam' }, () => resolve()));
+
+    const ack: any = await new Promise((resolve) => c2.emit('room:play-again', resolve));
+    expect(ack.ok).toBe(false);
+    expect(['NOT_HOST', 'NOT_IN_END']).toContain(ack.error);
+
+    clients.forEach((c) => c.disconnect());
+  });
+
+  it('rejects when not in end phase', async () => {
+    const c = makeClient();
+    await new Promise<void>((r) => c.on('connect', () => r()));
+    await new Promise((resolve) => c.emit('room:create', { name: 'Dev' }, resolve));
+    const ack: any = await new Promise((resolve) => c.emit('room:play-again', resolve));
+    expect(ack.ok).toBe(false);
+    expect(ack.error).toBe('NOT_IN_END');
+    c.disconnect();
+  });
+});

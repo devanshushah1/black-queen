@@ -11,6 +11,7 @@ import {
   passBidInRoom,
   chooseTrumpPartnerInRoom,
   playCardInRoom,
+  playAgainInRoom,
 } from './rooms';
 import { toRoomView } from './game/view';
 import type {
@@ -157,6 +158,15 @@ export function attachSocketHandlers(io: Srv): void {
       cb({ ok: true });
       // Re-broadcast hands too — the player's hand just lost a card.
       broadcastHands(io, res.room);
+      broadcastState(io, res.room);
+    });
+
+    socket.on('room:play-again', (cb) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const res = playAgainInRoom({ code: roomCode, sessionId });
+      if (!res.ok) { cb({ ok: false, error: res.error }); return; }
+      cb({ ok: true });
       broadcastState(io, res.room);
     });
 

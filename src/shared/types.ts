@@ -53,6 +53,7 @@ export interface ClientToServerEvents {
     payload: { card: Card },
     cb: (res: PlayCardAck) => void
   ) => void;
+  'room:play-again': (cb: (res: PlayAgainAck) => void) => void;
 }
 
 /** Server → Client */
@@ -190,6 +191,10 @@ export type PlayCardResult =
 export type PlayCardAck =
   | { ok: true }
   | { ok: false; error: 'NOT_YOUR_TURN' | 'NOT_IN_HAND' | 'MUST_FOLLOW_SUIT' | 'NOT_IN_GAME' | 'NOT_IN_ROOM' };
+
+export type PlayAgainAck =
+  | { ok: true }
+  | { ok: false; error: 'NOT_HOST' | 'NOT_IN_END' | 'NOT_IN_ROOM' };
 
 // =========================================================================
 // Game state (added to Room when phase moves past 'lobby')
