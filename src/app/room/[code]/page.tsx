@@ -6,7 +6,17 @@ import { selectMe, useGameStore } from '@/client/store';
 import { JoinView } from '@/components/views/JoinView';
 import { WaitingRoomView } from '@/components/views/WaitingRoomView';
 import { BiddingView } from '@/components/views/BiddingView';
-import type { BidActionAck, JoinRoomResult, StartGameResult } from '@/shared/types';
+import { TrumpPartnerView } from '@/components/views/TrumpPartnerView';
+import { TrickPlayView } from '@/components/views/TrickPlayView';
+import type {
+  BidActionAck,
+  JoinRoomResult,
+  StartGameResult,
+  TrumpPartnerActionAck,
+  PlayCardAck,
+  Suit,
+  Card,
+} from '@/shared/types';
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -20,6 +30,7 @@ export default function RoomPage() {
   const setRoom = useGameStore((s) => s.setRoom);
   const me = useGameStore(selectMe);
   const [bidBusy, setBidBusy] = useState(false);
+  const [tpBusy, setTpBusy] = useState(false);
 
   async function handleJoin(name: string): Promise<JoinRoomResult> {
     const res = await new Promise<JoinRoomResult>((resolve) =>
@@ -38,6 +49,18 @@ export default function RoomPage() {
     setBidBusy(true);
     socket.emit('bid:pass', (res: BidActionAck) => { setBidBusy(false); if (!res.ok) console.warn('Pass failed:', res.error); });
   };
+  const handleTpConfirm = (trump: Suit, called: Card) => {
+    setTpBusy(true);
+    socket.emit('trump:choose', { trump, calledCard: called }, (res: TrumpPartnerActionAck) => {
+      setTpBusy(false);
+      if (!res.ok) console.warn('Trump-partner failed:', res.error);
+    });
+  };
+  const handleCardPlay = (card: Card) => {
+    socket.emit('card:play', { card }, (res: PlayCardAck) => {
+      if (!res.ok) console.warn('Play failed:', res.error);
+    });
+  };
 
   if (!sessionId || !me) return <JoinView code={code} onSubmit={handleJoin} />;
   if (!room) return <main className="min-h-screen flex items-center justify-center text-neutral-500">Loading…</main>;
@@ -48,11 +71,17 @@ export default function RoomPage() {
   if (room.phase === 'bidding') {
     return <BiddingView room={room} me={me} yourHand={yourHand} busy={bidBusy} onBid={handleBid} onPass={handlePass} onSendChat={handleSendChat} />;
   }
+  if (room.phase === 'trump_partner') {
+    return <TrumpPartnerView room={room} me={me} yourHand={yourHand} busy={tpBusy} onConfirm={handleTpConfirm} onSendChat={handleSendChat} />;
+  }
+  if (room.phase === 'play') {
+    return <TrickPlayView room={room} me={me} yourHand={yourHand} onPlay={handleCardPlay} onSendChat={handleSendChat} />;
+  }
   return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-3 p-6">
       <div className="text-gold-500 text-5xl font-serif">♛</div>
       <div className="text-2xl font-bold">Phase: <span className="text-gold-500">{room.phase}</span></div>
-      <div className="text-xs text-neutral-500 mt-2">(later in this plan.)</div>
+      <div className="text-xs text-neutral-500 mt-2">(Plan 4 will build the results screen.)</div>
     </main>
   );
 }
