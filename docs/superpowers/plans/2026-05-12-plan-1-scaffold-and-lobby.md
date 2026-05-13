@@ -2786,7 +2786,10 @@ test('host creates a room, three guests join via link, host starts the game', as
   const code = roomUrl.match(/\/room\/([A-Z]{4})/)![1];
 
   // Host sees their own seat with host badge.
-  await expect(host.getByText('Dev')).toBeVisible();
+  // Note: 'Dev' also appears in a chat message ("Dev created the room"), so we
+  // use exact match + .first() to pin to the seat label and avoid strict-mode
+  // violations (the chat span uses exact text 'Dev created the room', not 'Dev').
+  await expect(host.getByText('Dev', { exact: true }).first()).toBeVisible();
   await expect(host.getByText(/★ host/i)).toBeVisible();
 
   // Guests join via the room URL.
