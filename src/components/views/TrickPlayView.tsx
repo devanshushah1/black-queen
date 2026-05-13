@@ -1,5 +1,7 @@
 'use client';
+import { useEffect, useRef, useState } from 'react';
 import type { RoomView, Player, Card, Seat } from '@/shared/types';
+import type { PlayedCard } from '@/shared/types';
 import { OpponentFan } from '@/components/play/OpponentFan';
 import { PlayedCardsCenter } from '@/components/play/PlayedCardsCenter';
 import { PlayerHand } from '@/components/play/PlayerHand';
@@ -8,7 +10,8 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { seatNameFor } from '@/components/shared/seatNameFor';
 import { MuteToggle } from '@/components/MuteToggle';
 import { cardKey } from '@/shared/types';
-import { LayoutGroup } from 'framer-motion';
+import { Card as CardComponent } from '@/components/Card';
+import { LayoutGroup, motion } from 'framer-motion';
 
 interface Props {
   room: RoomView;
@@ -25,6 +28,41 @@ function rotate(viewerSeat: Seat) {
     top: ((viewerSeat + 1) % 4) + 1,
     right: ((viewerSeat + 2) % 4) + 1,
   };
+}
+
+function seatScreenOffset(viewerSeat: Seat, seat: Seat): { x: number; y: number } {
+  const diff = (seat - viewerSeat + 4) % 4;
+  if (diff === 0) return { x: 0, y: 280 };   // bottom (you)
+  if (diff === 1) return { x: -360, y: 0 };  // left
+  if (diff === 2) return { x: 0, y: -180 };  // top
+  return { x: 360, y: 0 };                   // right
+}
+
+function CollectingPile({
+  plays,
+  viewerSeat,
+  winnerSeat,
+}: {
+  plays: PlayedCard[];
+  viewerSeat: Seat;
+  winnerSeat: Seat;
+}) {
+  const target = seatScreenOffset(viewerSeat, winnerSeat);
+  return (
+    <div className="relative w-[240px] h-[240px] mx-auto" data-testid="collecting-pile">
+      {plays.map(({ card }, i) => (
+        <motion.div
+          key={`collect-${cardKey(card)}`}
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+          initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+          animate={{ x: target.x, y: target.y, opacity: 0, scale: 0.7 }}
+          transition={{ duration: 0.5, ease: [0.2, 0.7, 0.2, 1], delay: i * 0.02 }}
+        >
+          <CardComponent card={card} size="lg" />
+        </motion.div>
+      ))}
+    </div>
+  );
 }
 
 function opponentCardCount(room: RoomView, seat: Seat): number {
@@ -70,6 +108,35 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
     }
   }
 
+  // --- Trick collection animation state machine ---
+  // The server resolves tricks immediately (CurrentTrick never has winnerSeat),
+  // so we detect newly completed tricks via game.completedTricks.
+  const [collectPhase, setCollectPhase] = useState<'idle' | 'pause' | 'pulse' | 'collect'>('idle');
+  const [animatingTrick, setAnimatingTrick] = useState<{ plays: PlayedCard[]; winnerSeat: Seat } | null>(null);
+  const lastCompletedCount = useRef<number>(game.completedTricks.length);
+
+  useEffect(() => {
+    const currentCount = game.completedTricks.length;
+    if (currentCount > lastCompletedCount.current) {
+      const justCompleted = game.completedTricks[currentCount - 1];
+      lastCompletedCount.current = currentCount;
+      setAnimatingTrick({ plays: justCompleted.plays, winnerSeat: justCompleted.winnerSeat });
+      setCollectPhase('pause');
+      const t1 = setTimeout(() => setCollectPhase('pulse'), 700);
+      const t2 = setTimeout(() => setCollectPhase('collect'), 700 + 400);
+      const t3 = setTimeout(() => {
+        setCollectPhase('idle');
+        setAnimatingTrick(null);
+      }, 700 + 400 + 500 + 100);
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+      };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.completedTricks.length]);
+
   return (
     <main className="min-h-screen relative bg-felt-900 p-6">
       <MuteToggle />
@@ -94,7 +161,19 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
           </div>
 
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-            {trick && <PlayedCardsCenter plays={trick.plays} viewerSeat={me.seat} />}
+            {animatingTrick && collectPhase !== 'collect' && (
+              <PlayedCardsCenter
+                plays={animatingTrick.plays}
+                viewerSeat={me.seat}
+                winningSeat={collectPhase === 'pulse' ? animatingTrick.winnerSeat : null}
+              />
+            )}
+            {animatingTrick && collectPhase === 'collect' && (
+              <CollectingPile plays={animatingTrick.plays} viewerSeat={me.seat} winnerSeat={animatingTrick.winnerSeat} />
+            )}
+            {!animatingTrick && trick && (
+              <PlayedCardsCenter plays={trick.plays} viewerSeat={me.seat} />
+            )}
           </div>
         </div>
 
