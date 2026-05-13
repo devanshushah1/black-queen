@@ -45,6 +45,14 @@ export interface ClientToServerEvents {
   'chat:send':   (payload: { text: string }) => void;
   'bid:place':  (payload: { amount: number }, cb: (res: BidActionAck) => void) => void;
   'bid:pass':   (cb: (res: BidActionAck) => void) => void;
+  'trump:choose': (
+    payload: { trump: Suit; calledCard: Card },
+    cb: (res: TrumpPartnerActionAck) => void
+  ) => void;
+  'card:play': (
+    payload: { card: Card },
+    cb: (res: PlayCardAck) => void
+  ) => void;
 }
 
 /** Server → Client */
@@ -129,11 +137,78 @@ export type BidActionAck =
   | { ok: false; error: 'INVALID_AMOUNT' | 'NOT_HIGHER' | 'ALREADY_BIDDER' | 'NO_BID_TO_PASS' | 'NOT_IN_GAME' | 'NOT_IN_ROOM' };
 
 // =========================================================================
+// Trump + Partner choice
+// =========================================================================
+
+export interface TrumpPartnerChoice {
+  /** Suit chosen by the bidder. */
+  trump: Suit;
+  /** Specific card the bidder calls. The owner becomes their partner. */
+  calledCard: Card;
+}
+
+export type TrumpPartnerActionResult =
+  | { ok: true }
+  | { ok: false; error: 'NOT_BIDDER' | 'INVALID_CARD' | 'OWN_CARD' | 'NOT_IN_GAME' };
+
+export type TrumpPartnerActionAck =
+  | { ok: true }
+  | { ok: false; error: 'NOT_BIDDER' | 'INVALID_CARD' | 'OWN_CARD' | 'NOT_IN_GAME' | 'NOT_IN_ROOM' };
+
+// =========================================================================
+// Tricks
+// =========================================================================
+
+/** A card played by a specific seat in a trick. */
+export interface PlayedCard {
+  seat: Seat;
+  card: Card;
+}
+
+/** Trick currently being assembled (1-4 cards). */
+export interface CurrentTrick {
+  /** Seat that led this trick (plays the first card). */
+  ledBy: Seat;
+  /** Suit of the lead card (set after the first card is played). */
+  ledSuit: Suit | null;
+  /** Cards played so far, in play order. */
+  plays: PlayedCard[];
+}
+
+/** A trick that has been completed (4 cards + winner determined). */
+export interface CompletedTrick {
+  ledBy: Seat;
+  ledSuit: Suit;
+  plays: PlayedCard[];     // exactly 4 cards
+  winnerSeat: Seat;
+}
+
+export type PlayCardResult =
+  | { ok: true }
+  | { ok: false; error: 'NOT_YOUR_TURN' | 'NOT_IN_HAND' | 'MUST_FOLLOW_SUIT' | 'NOT_IN_GAME' };
+
+export type PlayCardAck =
+  | { ok: true }
+  | { ok: false; error: 'NOT_YOUR_TURN' | 'NOT_IN_HAND' | 'MUST_FOLLOW_SUIT' | 'NOT_IN_GAME' | 'NOT_IN_ROOM' };
+
+// =========================================================================
 // Game state (added to Room when phase moves past 'lobby')
 // =========================================================================
 
 export interface GameState {
   bid: BidState;
+  /** Trump suit + called partner card. Set when trump_partner phase completes. */
+  trumpPartner: TrumpPartnerChoice | null;
+  /** Current trick being built. Set when phase advances to 'play'. */
+  currentTrick: CurrentTrick | null;
+  /** Completed tricks in order (most recent last). Max 13. */
+  completedTricks: CompletedTrick[];
+  /**
+   * Server-known partner seat. Wire visibility is `revealedPartnerSeat`.
+   */
+  partnerSeat: Seat | null;
+  /** Public — set when the called card has been played. */
+  revealedPartnerSeat: Seat | null;
 }
 
 /**

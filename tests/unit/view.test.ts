@@ -17,7 +17,14 @@ const sampleServerState: RoomServerState = {
   ],
   chat: [],
   createdAt: 1,
-  game: { bid: { currentBid: 90, currentBidderSeat: 1, passedSeats: [2], complete: false } },
+  game: {
+    bid: { currentBid: 90, currentBidderSeat: 1, passedSeats: [2], complete: false },
+    trumpPartner: null,
+    currentTrick: null,
+    completedTricks: [],
+    partnerSeat: null,
+    revealedPartnerSeat: null,
+  },
   hands: {
     1: [aceHearts],
     2: [fiveClubs],

@@ -229,7 +229,14 @@ export function startGame(input: StartGameInput): StartGameInternalResult {
 
   const deck = shuffle(createDeck());
   room.hands = deal(deck);
-  room.game = { bid: emptyBidState() };
+  room.game = {
+    bid: emptyBidState(),
+    trumpPartner: null,
+    currentTrick: null,
+    completedTricks: [],
+    partnerSeat: null,
+    revealedPartnerSeat: null,
+  };
   room.phase = 'bidding';
 
   return { ok: true, room };
