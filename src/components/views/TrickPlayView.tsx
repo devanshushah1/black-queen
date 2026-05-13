@@ -8,6 +8,7 @@ import { ChatPanel } from '@/components/ChatPanel';
 import { seatNameFor } from '@/components/shared/seatNameFor';
 import { MuteToggle } from '@/components/MuteToggle';
 import { cardKey } from '@/shared/types';
+import { LayoutGroup } from 'framer-motion';
 
 interface Props {
   room: RoomView;
@@ -74,35 +75,37 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
       <MuteToggle />
       <InfoBadges game={game} bidderName={bidderName} partnerName={partnerName} />
 
-      <div className="relative max-w-4xl mx-auto mt-6 h-[380px]">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
-          <OpponentFan count={opponentCardCount(room, layout.top as Seat)} orientation="top" />
-          <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.top)}</div>
-          {nextSeat === layout.top && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
-        </div>
-        <div className="absolute top-1/2 left-2 -translate-y-1/2 text-center">
-          <OpponentFan count={opponentCardCount(room, layout.left as Seat)} orientation="left" />
-          <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.left)}</div>
-          {nextSeat === layout.left && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
-        </div>
-        <div className="absolute top-1/2 right-2 -translate-y-1/2 text-center">
-          <OpponentFan count={opponentCardCount(room, layout.right as Seat)} orientation="right" />
-          <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.right)}</div>
-          {nextSeat === layout.right && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
+      <LayoutGroup>
+        <div className="relative max-w-4xl mx-auto mt-6 h-[380px]">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
+            <OpponentFan count={opponentCardCount(room, layout.top as Seat)} orientation="top" />
+            <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.top)}</div>
+            {nextSeat === layout.top && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
+          </div>
+          <div className="absolute top-1/2 left-2 -translate-y-1/2 text-center">
+            <OpponentFan count={opponentCardCount(room, layout.left as Seat)} orientation="left" />
+            <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.left)}</div>
+            {nextSeat === layout.left && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
+          </div>
+          <div className="absolute top-1/2 right-2 -translate-y-1/2 text-center">
+            <OpponentFan count={opponentCardCount(room, layout.right as Seat)} orientation="right" />
+            <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.right)}</div>
+            {nextSeat === layout.right && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
+          </div>
+
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+            {trick && <PlayedCardsCenter plays={trick.plays} viewerSeat={me.seat} />}
+          </div>
         </div>
 
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-          {trick && <PlayedCardsCenter plays={trick.plays} viewerSeat={me.seat} />}
+        <div className="max-w-4xl mx-auto mt-4">
+          <div className="text-[10px] uppercase tracking-widest text-neutral-500 text-center mb-1">
+            {isMyTurn ? <span className="text-gold-500">Your turn</span> : 'Waiting…'}
+          </div>
+          <PlayerHand hand={yourHand} legalKeys={legalKeys} active={isMyTurn} onPlay={onPlay} />
+          <div className="text-center mt-2 text-xs text-white font-semibold">{me.name} (you)</div>
         </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto mt-4">
-        <div className="text-[10px] uppercase tracking-widest text-neutral-500 text-center mb-1">
-          {isMyTurn ? <span className="text-gold-500">Your turn</span> : 'Waiting…'}
-        </div>
-        <PlayerHand hand={yourHand} legalKeys={legalKeys} active={isMyTurn} onPlay={onPlay} />
-        <div className="text-center mt-2 text-xs text-white font-semibold">{me.name} (you)</div>
-      </div>
+      </LayoutGroup>
 
       <div className="fixed bottom-3 right-3"><ChatPanel messages={room.chat} onSend={onSendChat} /></div>
     </main>
