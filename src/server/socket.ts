@@ -1,5 +1,15 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { createRoom, joinRoom, getRoom, setConnected, postChat, leaveRoom, startGame } from './rooms';
+import {
+  createRoom,
+  joinRoom,
+  getRoom,
+  setConnected,
+  postChat,
+  leaveRoom,
+  startGame,
+  placeBidInRoom,
+  passBidInRoom,
+} from './rooms';
 import { toRoomView } from './game/view';
 import type {
   ClientToServerEvents,
@@ -17,6 +27,18 @@ function roomChannel(code: string): string {
 
 function broadcastState(io: Srv, room: RoomServerState): void {
   io.to(roomChannel(room.code)).emit('room:state', toRoomView(room));
+}
+
+function broadcastHands(io: Srv, room: RoomServerState): void {
+  if (!room.hands) return;
+  for (const player of room.players) {
+    const hand = room.hands[player.seat];
+    for (const [, socket] of io.sockets.sockets) {
+      if (socket.data.sessionId === player.id) {
+        socket.emit('hand:update', { hand });
+      }
+    }
+  }
 }
 
 export function attachSocketHandlers(io: Srv): void {
@@ -76,7 +98,36 @@ export function attachSocketHandlers(io: Srv): void {
         return;
       }
       cb({ ok: true });
-      if (res.room) broadcastState(io, res.room);
+      broadcastHands(io, res.room);
+      broadcastState(io, res.room);
+    });
+
+    socket.on('bid:place', ({ amount }, cb) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const room = getRoom(roomCode);
+      if (!room) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const player = room.players.find((p) => p.id === sessionId);
+      if (!player) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+
+      const res = placeBidInRoom({ code: roomCode, seat: player.seat, amount });
+      if (!res.ok) { cb({ ok: false, error: res.error }); return; }
+      cb({ ok: true });
+      broadcastState(io, res.room);
+    });
+
+    socket.on('bid:pass', (cb) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const room = getRoom(roomCode);
+      if (!room) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const player = room.players.find((p) => p.id === sessionId);
+      if (!player) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+
+      const res = passBidInRoom({ code: roomCode, seat: player.seat });
+      if (!res.ok) { cb({ ok: false, error: res.error }); return; }
+      cb({ ok: true });
+      broadcastState(io, res.room);
     });
 
     socket.on('disconnect', () => {

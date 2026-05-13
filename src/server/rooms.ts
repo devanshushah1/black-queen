@@ -4,13 +4,14 @@ import {
   type Player,
   type Room,
   type JoinRoomResult,
+  type Seat,
   MAX_NAME_LENGTH,
   MIN_NAME_LENGTH,
   MAX_PLAYERS,
   ROOM_CODE_LENGTH,
 } from '@/shared/types';
 import { createDeck, shuffle, deal } from './game/deck';
-import { emptyBidState } from './game/bidding';
+import { emptyBidState, placeBid, passBid } from './game/bidding';
 
 // In-memory store; process-local. Fine for single-instance hobby deploys.
 const rooms = new Map<string, RoomServerState>();
@@ -246,4 +247,33 @@ export function setConnected(input: SetConnectedInput): void {
   const player = room.players.find((p) => p.id === input.sessionId);
   if (!player) return;
   player.connected = input.connected;
+}
+
+type BidInRoomResult =
+  | { ok: true; room: RoomServerState }
+  | { ok: false; error: 'NOT_IN_GAME' | 'INVALID_AMOUNT' | 'NOT_HIGHER' | 'ALREADY_BIDDER' | 'NO_BID_TO_PASS' };
+
+export function placeBidInRoom(input: { code: string; seat: Seat; amount: number }): BidInRoomResult {
+  const room = rooms.get(input.code);
+  if (!room || !room.game || room.phase !== 'bidding') {
+    return { ok: false, error: 'NOT_IN_GAME' };
+  }
+  const res = placeBid(room.game.bid, input.seat, input.amount);
+  if (!res.ok) return { ok: false, error: res.error as BidInRoomResult extends { ok: false; error: infer E } ? E : never };
+  room.game.bid = res.state;
+  return { ok: true, room };
+}
+
+export function passBidInRoom(input: { code: string; seat: Seat }): BidInRoomResult {
+  const room = rooms.get(input.code);
+  if (!room || !room.game || room.phase !== 'bidding') {
+    return { ok: false, error: 'NOT_IN_GAME' };
+  }
+  const res = passBid(room.game.bid, input.seat);
+  if (!res.ok) return { ok: false, error: res.error as BidInRoomResult extends { ok: false; error: infer E } ? E : never };
+  room.game.bid = res.state;
+  if (res.justCompleted) {
+    room.phase = 'trump_partner';
+  }
+  return { ok: true, room };
 }
