@@ -67,9 +67,11 @@ test('after 3 non-bidders pass, phase becomes trump_partner', async ({ browser }
     await page.getByRole('button', { name: /Pass at 75|^Pass$/ }).first().click();
   }
 
-  // After all 3 pass, the phase advances to trump_partner; the fallback page renders.
+  // After all 3 pass, the phase advances to trump_partner. The TrumpPartnerView
+  // renders a "Trump & partner" header; the bidder additionally sees the picker
+  // (with "You won the bid") and others see the waiting screen ("is choosing").
   for (const page of pages) {
-    await expect(page.getByText(/Phase:.*trump_partner/i)).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/Trump (&|and) partner/i)).toBeVisible({ timeout: 5000 });
   }
 
   await Promise.all(contexts.map((c: any) => c.close()));

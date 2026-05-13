@@ -17,7 +17,14 @@ const sampleServerState: RoomServerState = {
   ],
   chat: [],
   createdAt: 1,
-  game: { bid: { currentBid: 90, currentBidderSeat: 1, passedSeats: [2], complete: false } },
+  game: {
+    bid: { currentBid: 90, currentBidderSeat: 1, passedSeats: [2], complete: false },
+    trumpPartner: null,
+    currentTrick: null,
+    completedTricks: [],
+    partnerSeat: null,
+    revealedPartnerSeat: null,
+  },
   hands: {
     1: [aceHearts],
     2: [fiveClubs],
@@ -41,5 +48,29 @@ describe('toRoomView', () => {
     expect(view.chat).toEqual([]);
     expect(view.createdAt).toBe(1);
     expect(view.game?.bid.currentBid).toBe(90);
+  });
+
+  it('strips partnerSeat from game when game is set', () => {
+    const state: RoomServerState = {
+      code: 'ABCD',
+      hostId: 'h1',
+      phase: 'play',
+      players: [],
+      chat: [],
+      createdAt: 1,
+      hands: null,
+      game: {
+        bid: { currentBid: 90, currentBidderSeat: 1, passedSeats: [2, 3, 4], complete: true },
+        trumpPartner: { trump: 'spades', calledCard: { suit: 'hearts', rank: 'A' } },
+        currentTrick: null,
+        completedTricks: [],
+        partnerSeat: 2,
+        revealedPartnerSeat: null,
+      },
+    };
+    const view = toRoomView(state);
+    expect(view.game).not.toBeNull();
+    expect('partnerSeat' in (view.game ?? {})).toBe(false);
+    expect(view.game?.revealedPartnerSeat).toBeNull();
   });
 });
