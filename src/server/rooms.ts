@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import {
   type RoomServerState,
   type Player,
-  type Room,
+  type RoomView,
   type JoinRoomResult,
   type Seat,
   MAX_NAME_LENGTH,
@@ -119,9 +119,9 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
     ts: Date.now(),
   });
 
-  // JoinRoomResult wire shape uses Room (public). Since RoomServerState extends Room,
+  // JoinRoomResult wire shape uses RoomView (public). Since RoomServerState extends RoomView,
   // we can pass it directly — TypeScript widens.
-  return { ok: true, sessionId: id, room: room as unknown as Room };
+  return { ok: true, sessionId: id, room: room as unknown as RoomView };
 }
 
 type LeaveRoomResult =

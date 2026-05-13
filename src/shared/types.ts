@@ -56,12 +56,12 @@ export interface ServerToClientEvents {
 
 /** Result of room:create. */
 export type CreateRoomResult =
-  | { ok: true; sessionId: string; room: Room }
+  | { ok: true; sessionId: string; room: RoomView }
   | { ok: false; error: 'NAME_INVALID' };
 
 /** Result of room:join. */
 export type JoinRoomResult =
-  | { ok: true; sessionId: string; room: Room }
+  | { ok: true; sessionId: string; room: RoomView }
   | { ok: false; error: 'NOT_FOUND' | 'FULL' | 'NAME_TAKEN' | 'NAME_INVALID' };
 
 /** Result of room:start. */
