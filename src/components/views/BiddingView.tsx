@@ -1,10 +1,13 @@
 'use client';
+import { useEffect, useState } from 'react';
 import type { RoomView, Player, Seat, Card } from '@/shared/types';
 import { BidPanel } from '@/components/bidding/BidPanel';
 import { StatusPill } from '@/components/bidding/StatusPill';
 import { HandPreview } from '@/components/bidding/HandPreview';
 import { ChatPanel } from '@/components/ChatPanel';
 import { seatNameFor } from '@/components/shared/seatNameFor';
+import { MuteToggle } from '@/components/MuteToggle';
+import { DealAnimation } from '@/components/play/DealAnimation';
 
 function rotate(viewerSeat: Seat) {
   return { bottom: viewerSeat, left: (viewerSeat % 4) + 1, top: ((viewerSeat + 1) % 4) + 1, right: ((viewerSeat + 2) % 4) + 1 };
@@ -22,6 +25,13 @@ interface Props {
 
 export function BiddingView({ room, me, yourHand, busy, onBid, onPass, onSendChat }: Props) {
   const bid = room.game!.bid;
+  const isFreshDeal = bid.currentBid === null && bid.passedSeats.length === 0;
+  const [dealing, setDealing] = useState(isFreshDeal);
+
+  useEffect(() => {
+    if (!isFreshDeal) setDealing(false);
+  }, [isFreshDeal]);
+
   const layout = rotate(me.seat);
 
   const seatStatus = (seat: number) => {
@@ -34,6 +44,8 @@ export function BiddingView({ room, me, yourHand, busy, onBid, onPass, onSendCha
 
   return (
     <main className="min-h-screen p-6">
+      <MuteToggle />
+      {dealing && <DealAnimation viewerSeat={me.seat} onDone={() => setDealing(false)} />}
       <div className="max-w-3xl mx-auto">
         <div className="text-center mb-4">
           <div className="text-[10px] uppercase tracking-widest text-gold-500 font-bold">Bidding phase</div>

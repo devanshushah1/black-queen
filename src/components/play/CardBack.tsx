@@ -1,21 +1,21 @@
-interface Props {
-  size?: 'sm' | 'md';
-  rotateDeg?: number;
+interface CardBackProps {
+  size?: 'sm' | 'md' | 'lg';
 }
 
-const SIZES = {
-  sm: 'w-8 h-12',
-  md: 'w-10 h-14',
+const SIZE_CLASSES: Record<NonNullable<CardBackProps['size']>, { w: string; h: string }> = {
+  sm: { w: 'w-8',          h: 'h-12' },
+  md: { w: 'w-[44px]',     h: 'h-[62px]' },    // opponent backs (spec)
+  lg: { w: 'w-[88px]',     h: 'h-[124px]' },   // deck stack (spec)
 };
 
-export function CardBack({ size = 'sm', rotateDeg = 0 }: Props) {
+export function CardBack({ size = 'sm' }: CardBackProps) {
+  const s = SIZE_CLASSES[size];
   return (
     <div
-      className={`${SIZES[size]} rounded shadow border border-blue-300/60`}
+      className={`${s.w} ${s.h} rounded-md shadow-card-rest border border-blue-700/60`}
       style={{
-        background:
-          'repeating-linear-gradient(45deg, #1c3a6e 0, #1c3a6e 3px, #254a85 3px, #254a85 6px)',
-        transform: `rotate(${rotateDeg}deg)`,
+        backgroundImage:
+          'repeating-linear-gradient(135deg, #1e3a5f 0px, #1e3a5f 6px, #2c4870 6px, #2c4870 12px)',
       }}
     />
   );
