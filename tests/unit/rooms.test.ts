@@ -231,6 +231,25 @@ describe('startGame', () => {
     if (res.ok) return;
     expect(res.error).toBe('NOT_HOST');
   });
+
+  it('deals 13 cards to each seat and initializes empty bid state', () => {
+    const { room, sessionId: hostId } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    joinRoom({ code: room.code, name: 'Aman' });
+
+    const res = startGame({ code: room.code, sessionId: hostId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    expect(res.room.game).not.toBeNull();
+    expect(res.room.game!.bid.currentBid).toBeNull();
+    expect(res.room.hands).not.toBeNull();
+    expect(Object.keys(res.room.hands!).sort()).toEqual(['1', '2', '3', '4']);
+    for (const seat of [1, 2, 3, 4] as const) {
+      expect(res.room.hands![seat]).toHaveLength(13);
+    }
+  });
 });
 
 describe('setConnected', () => {

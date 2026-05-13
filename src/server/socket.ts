@@ -1,9 +1,20 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { createRoom, joinRoom, getRoom, setConnected, postChat, leaveRoom, startGame } from './rooms';
+import {
+  createRoom,
+  joinRoom,
+  getRoom,
+  setConnected,
+  postChat,
+  leaveRoom,
+  startGame,
+  placeBidInRoom,
+  passBidInRoom,
+} from './rooms';
+import { toRoomView } from './game/view';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
-  Room,
+  RoomServerState,
 } from '@/shared/types';
 
 type SocketData = { sessionId?: string; roomCode?: string };
@@ -14,8 +25,20 @@ function roomChannel(code: string): string {
   return `room:${code}`;
 }
 
-function broadcastState(io: Srv, room: Room): void {
-  io.to(roomChannel(room.code)).emit('room:state', room);
+function broadcastState(io: Srv, room: RoomServerState): void {
+  io.to(roomChannel(room.code)).emit('room:state', toRoomView(room));
+}
+
+function broadcastHands(io: Srv, room: RoomServerState): void {
+  if (!room.hands) return;
+  for (const player of room.players) {
+    const hand = room.hands[player.seat];
+    for (const [, socket] of io.sockets.sockets) {
+      if (socket.data.sessionId === player.id) {
+        socket.emit('hand:update', { hand });
+      }
+    }
+  }
 }
 
 export function attachSocketHandlers(io: Srv): void {
@@ -26,7 +49,7 @@ export function attachSocketHandlers(io: Srv): void {
         socket.data.sessionId = sessionId;
         socket.data.roomCode = room.code;
         socket.join(roomChannel(room.code));
-        cb({ ok: true, sessionId, room });
+        cb({ ok: true, sessionId, room: toRoomView(room) });
       } catch {
         cb({ ok: false, error: 'NAME_INVALID' });
       }
@@ -41,8 +64,9 @@ export function attachSocketHandlers(io: Srv): void {
       socket.data.sessionId = res.sessionId;
       socket.data.roomCode = code;
       socket.join(roomChannel(code));
-      broadcastState(io, res.room);
-      cb(res);
+      const stored = getRoom(code);
+      if (stored) broadcastState(io, stored);
+      cb({ ok: true, sessionId: res.sessionId, room: stored ? toRoomView(stored) : res.room });
     });
 
     socket.on('chat:send', ({ text }) => {
@@ -74,7 +98,36 @@ export function attachSocketHandlers(io: Srv): void {
         return;
       }
       cb({ ok: true });
-      if (res.room) broadcastState(io, res.room);
+      broadcastHands(io, res.room);
+      broadcastState(io, res.room);
+    });
+
+    socket.on('bid:place', ({ amount }, cb) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const room = getRoom(roomCode);
+      if (!room) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const player = room.players.find((p) => p.id === sessionId);
+      if (!player) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+
+      const res = placeBidInRoom({ code: roomCode, seat: player.seat, amount });
+      if (!res.ok) { cb({ ok: false, error: res.error }); return; }
+      cb({ ok: true });
+      broadcastState(io, res.room);
+    });
+
+    socket.on('bid:pass', (cb) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const room = getRoom(roomCode);
+      if (!room) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+      const player = room.players.find((p) => p.id === sessionId);
+      if (!player) { cb({ ok: false, error: 'NOT_IN_ROOM' }); return; }
+
+      const res = passBidInRoom({ code: roomCode, seat: player.seat });
+      if (!res.ok) { cb({ ok: false, error: res.error }); return; }
+      cb({ ok: true });
+      broadcastState(io, res.room);
     });
 
     socket.on('disconnect', () => {

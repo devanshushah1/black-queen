@@ -42,10 +42,9 @@ test('host creates a room, three guests join via link, host starts the game', as
   // Host starts the game.
   await host.getByRole('button', { name: /^Start Game$/ }).click();
 
-  // All 4 pages should transition to /game-starting.
+  // After Start, all 4 pages should show the Bidding phase header (still on /room/CODE).
   for (const page of pages) {
-    await expect(page).toHaveURL(/\/game-starting/);
-    await expect(page.getByText(/Phase:/)).toBeVisible();
+    await expect(page.getByText(/Bidding phase/i)).toBeVisible();
   }
 
   await Promise.all(contexts.map((c) => c.close()));

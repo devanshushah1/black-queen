@@ -4,7 +4,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { io as ioClient, type Socket as ClientSocket } from 'socket.io-client';
 import { attachSocketHandlers } from '@/server/socket';
 import { _resetRoomsForTest } from '@/server/rooms';
-import type { ClientToServerEvents, ServerToClientEvents, Room } from '@/shared/types';
+import type { Card, ClientToServerEvents, ServerToClientEvents, Room } from '@/shared/types';
 
 let httpServer: HttpServer;
 let io: SocketIOServer;
@@ -214,5 +214,120 @@ describe('socket: room:start', () => {
     expect(res.ok).toBe(false);
     expect(res.error).toBe('NEED_FOUR');
     host.disconnect();
+  });
+});
+
+describe('socket: hand:update', () => {
+  it('each client receives their own 13-card hand on game start', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+
+    const handPromises = clients.map(
+      (c) => new Promise<{ hand: Card[] }>((resolve) => c.once('hand:update', resolve))
+    );
+
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const code = created.room.code;
+    for (const [client, name] of [[c2, 'Sam'], [c3, 'Riya'], [c4, 'Aman']] as const) {
+      await new Promise<void>((resolve) => client.emit('room:join', { code, name }, () => resolve()));
+    }
+
+    await new Promise((resolve) => host.emit('room:start', resolve));
+
+    const hands = await Promise.all(handPromises);
+    for (const h of hands) {
+      expect(h.hand).toHaveLength(13);
+    }
+    const allKeys = new Set(hands.flatMap((h) => h.hand.map((c) => `${c.rank}-${c.suit}`)));
+    expect(allKeys.size).toBe(52);
+
+    clients.forEach((c) => c.disconnect());
+  });
+});
+
+describe('socket: bid:place + bid:pass', () => {
+  it('a valid bid is accepted, broadcast in room:state, and ack returned', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const code = created.room.code;
+    for (const [client, name] of [[c2, 'Sam'], [c3, 'Riya'], [c4, 'Aman']] as const) {
+      await new Promise<void>((resolve) => client.emit('room:join', { code, name }, () => resolve()));
+    }
+
+    // Register listeners BEFORE emitting so we don't race the broadcast.
+    const biddingPhasePromises = clients.map((c) => new Promise<void>((resolve) => {
+      const handler = (state: any) => {
+        if (state.phase === 'bidding') { c.off('room:state', handler); resolve(); }
+      };
+      c.on('room:state', handler);
+    }));
+    await new Promise((resolve) => host.emit('room:start', resolve));
+    await Promise.all(biddingPhasePromises);
+
+    const broadcastPromise = new Promise<any>((resolve) => host.once('room:state', resolve));
+    const ack: any = await new Promise((resolve) => c2.emit('bid:place', { amount: 90 }, resolve));
+    expect(ack.ok).toBe(true);
+
+    const state = await broadcastPromise;
+    expect(state.game.bid.currentBid).toBe(90);
+    expect(state.game.bid.currentBidderSeat).toBe(2);
+
+    clients.forEach((c) => c.disconnect());
+  });
+
+  it('rejects an invalid bid amount with INVALID_AMOUNT', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const code = created.room.code;
+    for (const [client, name] of [[c2, 'Sam'], [c3, 'Riya'], [c4, 'Aman']] as const) {
+      await new Promise<void>((resolve) => client.emit('room:join', { code, name }, () => resolve()));
+    }
+    await new Promise((resolve) => host.emit('room:start', resolve));
+
+    const ack: any = await new Promise((resolve) => c2.emit('bid:place', { amount: 73 }, resolve));
+    expect(ack.ok).toBe(false);
+    expect(ack.error).toBe('INVALID_AMOUNT');
+
+    clients.forEach((c) => c.disconnect());
+  });
+
+  it('completes bidding when 3 non-bidders pass and broadcasts trump_partner phase', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const code = created.room.code;
+    for (const [client, name] of [[c2, 'Sam'], [c3, 'Riya'], [c4, 'Aman']] as const) {
+      await new Promise<void>((resolve) => client.emit('room:join', { code, name }, () => resolve()));
+    }
+
+    // Register the final-state listener BEFORE emitting any bid action so the
+    // trump_partner broadcast can't slip past us.
+    const finalState = new Promise<any>((resolve) => {
+      const h = (s: any) => {
+        if (s.phase === 'trump_partner') { host.off('room:state', h); resolve(s); }
+      };
+      host.on('room:state', h);
+    });
+
+    await new Promise((resolve) => host.emit('room:start', resolve));
+    await new Promise((resolve) => host.emit('bid:place', { amount: 90 }, resolve));
+
+    for (const c of [c2, c3, c4]) {
+      await new Promise((resolve) => c.emit('bid:pass', resolve));
+    }
+
+    const state = await finalState;
+    expect(state.phase).toBe('trump_partner');
+    expect(state.game.bid.complete).toBe(true);
+    expect(state.game.bid.currentBid).toBe(90);
+    expect(state.game.bid.currentBidderSeat).toBe(1);
+
+    clients.forEach((c) => c.disconnect());
   });
 });
