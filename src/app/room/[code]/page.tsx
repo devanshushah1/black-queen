@@ -3,23 +3,10 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useSocket } from '@/client/useSocket';
 import { selectMe, useGameStore } from '@/client/store';
-import { Seat } from '@/components/Seat';
-import { InviteCard } from '@/components/InviteCard';
-import { StartCard } from '@/components/StartCard';
-import { ChatPanel } from '@/components/ChatPanel';
-import { BidPanel } from '@/components/bidding/BidPanel';
-import { StatusPill } from '@/components/bidding/StatusPill';
-import { HandPreview } from '@/components/bidding/HandPreview';
-import type { JoinRoomResult, Player, StartGameResult, BidActionAck, Seat as SeatT } from '@/shared/types';
-
-function rotateSeats(viewerSeat: SeatT) {
-  return {
-    bottom: viewerSeat,
-    left: (viewerSeat % 4) + 1,
-    top: ((viewerSeat + 1) % 4) + 1,
-    right: ((viewerSeat + 2) % 4) + 1,
-  };
-}
+import { JoinView } from '@/components/views/JoinView';
+import { WaitingRoomView } from '@/components/views/WaitingRoomView';
+import { BiddingView } from '@/components/views/BiddingView';
+import type { BidActionAck, JoinRoomResult, StartGameResult } from '@/shared/types';
 
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
@@ -32,189 +19,40 @@ export default function RoomPage() {
   const setSession = useGameStore((s) => s.setSession);
   const setRoom = useGameStore((s) => s.setRoom);
   const me = useGameStore(selectMe);
-
-  const [joinName, setJoinName] = useState('');
-  const [joinErr, setJoinErr] = useState<string | null>(null);
-  const [joinBusy, setJoinBusy] = useState(false);
   const [bidBusy, setBidBusy] = useState(false);
 
-  async function handleJoin(e: React.FormEvent) {
-    e.preventDefault();
-    setJoinErr(null);
-    if (!joinName.trim()) { setJoinErr('Pick a display name'); return; }
-    setJoinBusy(true);
+  async function handleJoin(name: string): Promise<JoinRoomResult> {
     const res = await new Promise<JoinRoomResult>((resolve) =>
-      socket.emit('room:join', { code, name: joinName.trim() }, resolve)
+      socket.emit('room:join', { code, name }, resolve)
     );
-    setJoinBusy(false);
-    if (!res.ok) {
-      setJoinErr(
-        res.error === 'NOT_FOUND' ? 'Room not found.'
-        : res.error === 'FULL' ? 'Room is full.'
-        : res.error === 'NAME_TAKEN' ? 'Name is taken.'
-        : 'Invalid name.'
-      );
-      return;
-    }
-    setSession(res.sessionId);
-    setRoom(res.room);
+    if (res.ok) { setSession(res.sessionId); setRoom(res.room); }
+    return res;
   }
-
-  if (!sessionId || !me) {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center gap-5 p-6">
-        <div className="text-center">
-          <div className="text-gold-500 text-5xl font-serif leading-none">♛</div>
-          <div className="text-xl font-bold mt-1">Black Queen</div>
-        </div>
-        <div className="w-80 bg-black/40 border border-white/10 rounded-xl p-5">
-          <div className="text-center text-xs text-neutral-400">You&apos;ve been invited to room</div>
-          <div className="text-center text-lg font-mono font-bold text-gold-500 mt-1">{code}</div>
-          <form onSubmit={handleJoin} className="mt-4 space-y-3">
-            <div>
-              <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">Your display name</label>
-              <input
-                value={joinName}
-                onChange={(e) => setJoinName(e.target.value)}
-                maxLength={20}
-                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm outline-none focus:border-gold-500"
-                placeholder="Pick something fun"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={joinBusy}
-              className="w-full bg-gold-500 hover:bg-gold-400 disabled:opacity-50 text-black font-bold rounded-lg py-2.5 text-sm"
-            >
-              Join room
-            </button>
-            {joinErr && <div className="text-red-400 text-xs text-center">{joinErr}</div>}
-          </form>
-        </div>
-      </main>
-    );
-  }
-
-  if (!room) {
-    return <main className="min-h-screen flex items-center justify-center text-neutral-500">Loading…</main>;
-  }
-
-  const seatLayout = rotateSeats(me.seat);
-  const playerAt = (seat: number): Player | null =>
-    room.players.find((p) => p.seat === seat) ?? null;
-
-  function handleStart() {
-    socket.emit('room:start', (res: StartGameResult) => {
-      if (!res.ok) console.warn('Start failed:', res.error);
-    });
-  }
-  function handleSendChat(text: string) {
-    socket.emit('chat:send', { text });
-  }
-  function handleBid(amount: number) {
+  const handleStart = () => socket.emit('room:start', (res: StartGameResult) => { if (!res.ok) console.warn('Start failed:', res.error); });
+  const handleSendChat = (text: string) => socket.emit('chat:send', { text });
+  const handleBid = (amount: number) => {
     setBidBusy(true);
-    socket.emit('bid:place', { amount }, (res: BidActionAck) => {
-      setBidBusy(false);
-      if (!res.ok) console.warn('Bid failed:', res.error);
-    });
-  }
-  function handlePass() {
+    socket.emit('bid:place', { amount }, (res: BidActionAck) => { setBidBusy(false); if (!res.ok) console.warn('Bid failed:', res.error); });
+  };
+  const handlePass = () => {
     setBidBusy(true);
-    socket.emit('bid:pass', (res: BidActionAck) => {
-      setBidBusy(false);
-      if (!res.ok) console.warn('Pass failed:', res.error);
-    });
-  }
+    socket.emit('bid:pass', (res: BidActionAck) => { setBidBusy(false); if (!res.ok) console.warn('Pass failed:', res.error); });
+  };
 
-  const inviteUrl = typeof window !== 'undefined' ? `${window.location.origin}/room/${room.code}` : `/room/${room.code}`;
-  const isHost = room.hostId === sessionId;
-  const isFull = room.players.length >= 4;
+  if (!sessionId || !me) return <JoinView code={code} onSubmit={handleJoin} />;
+  if (!room) return <main className="min-h-screen flex items-center justify-center text-neutral-500">Loading…</main>;
 
   if (room.phase === 'lobby') {
-    return (
-      <main className="min-h-screen p-6">
-        <div className="flex items-center justify-between mb-4 max-w-3xl mx-auto">
-          <div>
-            <div className="text-[9px] uppercase tracking-widest text-neutral-400">Room</div>
-            <div className="text-xl font-bold text-gold-500 font-mono tracking-widest">{room.code}</div>
-          </div>
-          <div className="text-right">
-            <div className="text-[9px] uppercase tracking-widest text-neutral-400">Players</div>
-            <div className="text-sm font-semibold text-gold-500">{room.players.length} / 4</div>
-          </div>
-        </div>
-
-        <div className="relative mx-auto max-w-3xl h-72">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2"><Seat player={playerAt(seatLayout.top)} seatLabel={`seat ${seatLayout.top}`} isHost={!!playerAt(seatLayout.top) && playerAt(seatLayout.top)!.id === room.hostId} /></div>
-          <div className="absolute top-1/2 left-8 -translate-y-1/2"><Seat player={playerAt(seatLayout.left)} seatLabel={`seat ${seatLayout.left}`} isHost={!!playerAt(seatLayout.left) && playerAt(seatLayout.left)!.id === room.hostId} /></div>
-          <div className="absolute top-1/2 right-8 -translate-y-1/2"><Seat player={playerAt(seatLayout.right)} seatLabel={`seat ${seatLayout.right}`} isHost={!!playerAt(seatLayout.right) && playerAt(seatLayout.right)!.id === room.hostId} /></div>
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2"><Seat player={me} seatLabel={`seat ${seatLayout.bottom}`} isYou isHost={isHost} /></div>
-        </div>
-
-        <div className="flex justify-center gap-4 mt-4">
-          <InviteCard code={room.code} url={inviteUrl} disabled={isFull} />
-          <StartCard filled={room.players.length} isHost={isHost} onStart={handleStart} />
-        </div>
-
-        <div className="fixed bottom-3 right-3"><ChatPanel messages={room.chat} onSend={handleSendChat} /></div>
-      </main>
-    );
+    return <WaitingRoomView room={room} me={me} sessionId={sessionId} onStart={handleStart} onSendChat={handleSendChat} />;
   }
-
   if (room.phase === 'bidding') {
-    const bid = room.game!.bid;
-    const seatStatus = (seat: number) => {
-      if (bid.currentBidderSeat === seat) return { variant: 'bidder' as const, label: `bid ${bid.currentBid}` };
-      if (bid.passedSeats.includes(seat as SeatT)) return { variant: 'passed' as const, label: 'passed' };
-      return { variant: 'live' as const, label: 'deciding…', pulse: true };
-    };
-
-    return (
-      <main className="min-h-screen p-6">
-        <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-4">
-            <div className="text-[10px] uppercase tracking-widest text-gold-500 font-bold">Bidding phase</div>
-            <div className="text-xs text-neutral-400 mt-1">Min 75 · Max 150 · Increments of 5</div>
-          </div>
-
-          <div className="relative h-56 mb-4">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
-              <div className="text-sm font-semibold">{playerAt(seatLayout.top)?.name}</div>
-              <StatusPill {...seatStatus(seatLayout.top)} />
-            </div>
-            <div className="absolute top-1/2 left-8 -translate-y-1/2 text-center">
-              <div className="text-sm font-semibold">{playerAt(seatLayout.left)?.name}</div>
-              <StatusPill {...seatStatus(seatLayout.left)} />
-            </div>
-            <div className="absolute top-1/2 right-8 -translate-y-1/2 text-center">
-              <div className="text-sm font-semibold">{playerAt(seatLayout.right)?.name}</div>
-              <StatusPill {...seatStatus(seatLayout.right)} />
-            </div>
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
-              <BidPanel bid={bid} yourSeat={me.seat} busy={bidBusy} onBid={handleBid} onPass={handlePass} />
-            </div>
-          </div>
-
-          <div className="mt-8">
-            <div className="text-[10px] uppercase tracking-widest text-neutral-500 text-center mb-2">your hand</div>
-            <HandPreview hand={yourHand} />
-            <div className="text-center mt-3">
-              <span className="text-sm font-semibold">{me.name}</span>
-              <span className="ml-2"><StatusPill {...seatStatus(me.seat)} /></span>
-            </div>
-          </div>
-        </div>
-
-        <div className="fixed bottom-3 right-3"><ChatPanel messages={room.chat} onSend={handleSendChat} /></div>
-      </main>
-    );
+    return <BiddingView room={room} me={me} yourHand={yourHand} busy={bidBusy} onBid={handleBid} onPass={handlePass} onSendChat={handleSendChat} />;
   }
-
   return (
     <main className="min-h-screen flex flex-col items-center justify-center gap-3 p-6">
       <div className="text-gold-500 text-5xl font-serif">♛</div>
       <div className="text-2xl font-bold">Phase: <span className="text-gold-500">{room.phase}</span></div>
-      <div className="text-xs text-neutral-500 mt-2">(Plan 3 builds this UI.)</div>
+      <div className="text-xs text-neutral-500 mt-2">(later in this plan.)</div>
     </main>
   );
 }
