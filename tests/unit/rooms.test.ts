@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { generateRoomCode, createRoom, getRoom, _resetRoomsForTest } from '@/server/rooms';
 import { joinRoom } from '@/server/rooms';
 import { leaveRoom, postChat } from '@/server/rooms';
+import { startGame, setConnected } from '@/server/rooms';
 
 beforeEach(() => _resetRoomsForTest());
 
@@ -192,5 +193,57 @@ describe('postChat', () => {
     const { room } = createRoom({ hostName: 'Dev' });
     const res = postChat({ code: room.code, sessionId: 'fake', text: 'hi' });
     expect(res.ok).toBe(false);
+  });
+});
+
+describe('startGame', () => {
+  it('moves phase from lobby to bidding when host starts with 4 players', () => {
+    const { room, sessionId: hostId } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    joinRoom({ code: room.code, name: 'Aman' });
+
+    const res = startGame({ code: room.code, sessionId: hostId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.room.phase).toBe('bidding');
+  });
+
+  it('rejects with NEED_FOUR when fewer than 4 players', () => {
+    const { room, sessionId: hostId } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+
+    const res = startGame({ code: room.code, sessionId: hostId });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('NEED_FOUR');
+  });
+
+  it('rejects non-host with NOT_HOST', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const sam = joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    joinRoom({ code: room.code, name: 'Aman' });
+    if (!sam.ok) throw new Error('precondition');
+
+    const res = startGame({ code: room.code, sessionId: sam.sessionId });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('NOT_HOST');
+  });
+});
+
+describe('setConnected', () => {
+  it('flips a player.connected flag', () => {
+    const { room, sessionId } = createRoom({ hostName: 'Dev' });
+    setConnected({ code: room.code, sessionId, connected: false });
+    expect(getRoom(room.code)?.players[0].connected).toBe(false);
+    setConnected({ code: room.code, sessionId, connected: true });
+    expect(getRoom(room.code)?.players[0].connected).toBe(true);
+  });
+
+  it('is a no-op if the session is not in the room', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    expect(() => setConnected({ code: room.code, sessionId: 'unknown', connected: false })).not.toThrow();
   });
 });

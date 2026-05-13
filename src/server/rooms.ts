@@ -194,3 +194,43 @@ export function postChat(input: PostChatInput): PostChatResult {
 
   return { ok: true, room };
 }
+
+export interface StartGameInput {
+  code: string;
+  sessionId: string;
+}
+
+/**
+ * Server-only return shape — richer than the wire `StartGameResult` because
+ * the socket layer needs the updated room to broadcast it. Wire response to
+ * the client is still `{ ok: true }` / `{ ok: false; error }` per the shared
+ * type; the room comes through `room:state` instead.
+ */
+type StartGameInternalResult =
+  | { ok: true; room: Room }
+  | { ok: false; error: 'NOT_HOST' | 'NEED_FOUR' };
+
+export function startGame(input: StartGameInput): StartGameInternalResult {
+  const room = rooms.get(input.code);
+  if (!room) return { ok: false, error: 'NOT_HOST' }; // unknown room treated as not-authorized
+
+  if (room.hostId !== input.sessionId) return { ok: false, error: 'NOT_HOST' };
+  if (room.players.length < MAX_PLAYERS) return { ok: false, error: 'NEED_FOUR' };
+
+  room.phase = 'bidding';
+  return { ok: true, room };
+}
+
+export interface SetConnectedInput {
+  code: string;
+  sessionId: string;
+  connected: boolean;
+}
+
+export function setConnected(input: SetConnectedInput): void {
+  const room = rooms.get(input.code);
+  if (!room) return;
+  const player = room.players.find((p) => p.id === input.sessionId);
+  if (!player) return;
+  player.connected = input.connected;
+}
