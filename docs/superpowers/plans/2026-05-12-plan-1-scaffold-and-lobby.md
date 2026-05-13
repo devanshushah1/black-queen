@@ -842,7 +842,7 @@ describe('leaveRoom', () => {
 
     const res = leaveRoom({ code: room.code, sessionId: join.sessionId });
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || res.wasLastPlayer) return;
     expect(res.room.players.map((p) => p.name)).toEqual(['Dev', 'Riya']);
     expect(res.room.players.map((p) => p.seat)).toEqual([1, 2]);
   });
@@ -854,7 +854,7 @@ describe('leaveRoom', () => {
 
     const res = leaveRoom({ code: room.code, sessionId: hostId });
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || res.wasLastPlayer) return;
     expect(res.room.hostId).toBe(join.sessionId);
   });
 
@@ -877,7 +877,7 @@ describe('leaveRoom', () => {
     if (!join.ok) throw new Error('precondition');
     const res = leaveRoom({ code: room.code, sessionId: join.sessionId });
     expect(res.ok).toBe(true);
-    if (!res.ok) return;
+    if (!res.ok || res.wasLastPlayer) return;
     const last = res.room.chat[res.room.chat.length - 1];
     expect(last.text).toMatch(/Sam left/);
   });
