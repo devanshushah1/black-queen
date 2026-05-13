@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSocket } from '@/client/useSocket';
 import { useGameStore } from '@/client/store';
+import { saveSession } from '@/client/session';
 import type { CreateRoomResult, JoinRoomResult } from '@/shared/types';
 
 export default function LandingPage() {
@@ -42,6 +43,7 @@ export default function LandingPage() {
     }
     setSession(res.sessionId);
     setRoom(res.room);
+    saveSession({ sessionId: res.sessionId, code: res.room.code });
     router.push(`/room/${res.room.code}`);
   });
 
@@ -69,6 +71,7 @@ export default function LandingPage() {
     }
     setSession(res.sessionId);
     setRoom(res.room);
+    saveSession({ sessionId: res.sessionId, code: cleanCode });
     router.push(`/room/${cleanCode}`);
   });
 

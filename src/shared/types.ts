@@ -86,7 +86,7 @@ export type StartGameResult =
 
 /** Result returned by session:resume. */
 export type ResumeAck =
-  | { ok: true; sessionId: string; room: Room }
+  | { ok: true; sessionId: string; room: RoomView }
   | { ok: false; error: 'NOT_FOUND' | 'REPLACED' };
 
 // =========================================================================
