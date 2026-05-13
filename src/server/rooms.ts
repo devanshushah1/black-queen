@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 import {
   type RoomServerState,
   type Player,
-  type RoomView,
   type JoinRoomResult,
   type Seat,
   MAX_NAME_LENGTH,
@@ -12,6 +11,7 @@ import {
 } from '@/shared/types';
 import { createDeck, shuffle, deal } from './game/deck';
 import { emptyBidState, placeBid, passBid } from './game/bidding';
+import { toRoomView } from './game/view';
 
 // In-memory store; process-local. Fine for single-instance hobby deploys.
 const rooms = new Map<string, RoomServerState>();
@@ -119,9 +119,9 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
     ts: Date.now(),
   });
 
-  // JoinRoomResult wire shape uses RoomView (public). Since RoomServerState extends RoomView,
-  // we can pass it directly — TypeScript widens.
-  return { ok: true, sessionId: id, room: room as unknown as RoomView };
+  // JoinRoomResult wire shape uses RoomView (public). Project through toRoomView so
+  // server-only fields like `hands` are stripped — never leak them on the wire.
+  return { ok: true, sessionId: id, room: toRoomView(room) };
 }
 
 type LeaveRoomResult =
