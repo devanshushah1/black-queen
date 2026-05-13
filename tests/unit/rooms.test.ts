@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { generateRoomCode, createRoom, getRoom, _resetRoomsForTest } from '@/server/rooms';
 import { joinRoom } from '@/server/rooms';
+import { leaveRoom, postChat } from '@/server/rooms';
 
 beforeEach(() => _resetRoomsForTest());
 
@@ -112,5 +113,84 @@ describe('joinRoom', () => {
     const last = res.room.chat[res.room.chat.length - 1];
     expect(last.authorId).toBeNull();
     expect(last.text).toMatch(/Sam joined/);
+  });
+});
+
+describe('leaveRoom', () => {
+  it('removes the player and reshuffles seats', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const join = joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    if (!join.ok) throw new Error('precondition');
+
+    const res = leaveRoom({ code: room.code, sessionId: join.sessionId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.room.players.map((p) => p.name)).toEqual(['Dev', 'Riya']);
+    expect(res.room.players.map((p) => p.seat)).toEqual([1, 2]);
+  });
+
+  it('transfers host to the next remaining player when host leaves', () => {
+    const { room, sessionId: hostId } = createRoom({ hostName: 'Dev' });
+    const join = joinRoom({ code: room.code, name: 'Sam' });
+    if (!join.ok) throw new Error('precondition');
+
+    const res = leaveRoom({ code: room.code, sessionId: hostId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.room.hostId).toBe(join.sessionId);
+  });
+
+  it('deletes the room entirely when the last player leaves', () => {
+    const { room, sessionId } = createRoom({ hostName: 'Dev' });
+    leaveRoom({ code: room.code, sessionId });
+    expect(getRoom(room.code)).toBeUndefined();
+  });
+
+  it('returns NOT_FOUND for unknown room', () => {
+    const res = leaveRoom({ code: 'ZZZZ', sessionId: 'fake' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('NOT_FOUND');
+  });
+
+  it('appends a system chat message on leave (when room still exists)', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const join = joinRoom({ code: room.code, name: 'Sam' });
+    if (!join.ok) throw new Error('precondition');
+    const res = leaveRoom({ code: room.code, sessionId: join.sessionId });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const last = res.room.chat[res.room.chat.length - 1];
+    expect(last.text).toMatch(/Sam left/);
+  });
+});
+
+describe('postChat', () => {
+  it('appends a chat message from a player', () => {
+    const { room, sessionId } = createRoom({ hostName: 'Dev' });
+    const res = postChat({ code: room.code, sessionId, text: 'hello' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const last = res.room.chat[res.room.chat.length - 1];
+    expect(last).toMatchObject({ authorName: 'Dev', text: 'hello' });
+  });
+
+  it('trims whitespace and rejects empty', () => {
+    const { room, sessionId } = createRoom({ hostName: 'Dev' });
+    const res = postChat({ code: room.code, sessionId, text: '   ' });
+    expect(res.ok).toBe(false);
+  });
+
+  it('caps message length at 200 chars', () => {
+    const { room, sessionId } = createRoom({ hostName: 'Dev' });
+    const res = postChat({ code: room.code, sessionId, text: 'a'.repeat(201) });
+    expect(res.ok).toBe(false);
+  });
+
+  it('rejects from unknown sessionId', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const res = postChat({ code: room.code, sessionId: 'fake', text: 'hi' });
+    expect(res.ok).toBe(false);
   });
 });

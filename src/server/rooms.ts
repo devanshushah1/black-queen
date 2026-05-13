@@ -113,3 +113,84 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
 
   return { ok: true, sessionId: id, room };
 }
+
+type LeaveRoomResult =
+  | { ok: true; room: Room; wasLastPlayer: false }
+  | { ok: true; room: null; wasLastPlayer: true }
+  | { ok: false; error: 'NOT_FOUND' | 'NOT_IN_ROOM' };
+
+export interface LeaveRoomInput {
+  code: string;
+  sessionId: string;
+}
+
+export function leaveRoom(input: LeaveRoomInput): LeaveRoomResult {
+  const room = rooms.get(input.code);
+  if (!room) return { ok: false, error: 'NOT_FOUND' };
+
+  const idx = room.players.findIndex((p) => p.id === input.sessionId);
+  if (idx === -1) return { ok: false, error: 'NOT_IN_ROOM' };
+
+  const leaver = room.players[idx];
+  room.players.splice(idx, 1);
+
+  if (room.players.length === 0) {
+    rooms.delete(room.code);
+    return { ok: true, room: null, wasLastPlayer: true };
+  }
+
+  // Reshuffle seats so they stay contiguous starting at 1.
+  room.players.forEach((p, i) => {
+    p.seat = (i + 1) as 1 | 2 | 3 | 4;
+  });
+
+  // Transfer host if the leaver was the host.
+  if (room.hostId === input.sessionId) {
+    room.hostId = room.players[0].id;
+  }
+
+  room.chat.push({
+    id: randomUUID(),
+    authorId: null,
+    authorName: null,
+    text: `${leaver.name} left`,
+    ts: Date.now(),
+  });
+
+  return { ok: true, room, wasLastPlayer: false };
+}
+
+type PostChatResult =
+  | { ok: true; room: Room }
+  | { ok: false; error: 'NOT_FOUND' | 'NOT_IN_ROOM' | 'INVALID_TEXT' };
+
+export interface PostChatInput {
+  code: string;
+  sessionId: string;
+  text: string;
+}
+
+const MAX_CHAT_LENGTH = 200;
+
+export function postChat(input: PostChatInput): PostChatResult {
+  const room = rooms.get(input.code);
+  if (!room) return { ok: false, error: 'NOT_FOUND' };
+
+  const player = room.players.find((p) => p.id === input.sessionId);
+  if (!player) return { ok: false, error: 'NOT_IN_ROOM' };
+
+  const text = input.text.trim();
+  if (text.length === 0 || text.length > MAX_CHAT_LENGTH) {
+    return { ok: false, error: 'INVALID_TEXT' };
+  }
+
+  room.chat.push({
+    id: randomUUID(),
+    authorId: player.id,
+    authorName: player.name,
+    text,
+    ts: Date.now(),
+  });
+
+  return { ok: true, room };
+}
