@@ -13,6 +13,8 @@ export interface Player {
   seat: 1 | 2 | 3 | 4;
   /** Is this player currently connected? */
   connected: boolean;
+  /** Epoch ms of most recent disconnect, or null if connected. */
+  disconnectedAt: number | null;
 }
 
 export interface ChatMessage {
@@ -54,6 +56,10 @@ export interface ClientToServerEvents {
     cb: (res: PlayCardAck) => void
   ) => void;
   'room:play-again': (cb: (res: PlayAgainAck) => void) => void;
+  'session:resume': (
+    payload: { sessionId: string; code: string },
+    cb: (res: ResumeAck) => void
+  ) => void;
 }
 
 /** Server → Client */
@@ -77,6 +83,11 @@ export type JoinRoomResult =
 export type StartGameResult =
   | { ok: true }
   | { ok: false; error: 'NOT_HOST' | 'NEED_FOUR' };
+
+/** Result returned by session:resume. */
+export type ResumeAck =
+  | { ok: true; sessionId: string; room: Room }
+  | { ok: false; error: 'NOT_FOUND' | 'REPLACED' };
 
 // =========================================================================
 // Cards
@@ -242,3 +253,6 @@ export const ROOM_CODE_LENGTH = 4;
 export const MAX_PLAYERS = 4;
 export const MIN_NAME_LENGTH = 1;
 export const MAX_NAME_LENGTH = 20;
+
+/** Window during which a disconnected player can resume their seat (ms). */
+export const REPLACEMENT_WINDOW_MS = 60_000;

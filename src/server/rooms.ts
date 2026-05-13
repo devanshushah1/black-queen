@@ -67,7 +67,7 @@ export interface CreateRoomOutput {
 export function createRoom(input: CreateRoomInput): CreateRoomOutput {
   const name = validateName(input.hostName);
   const hostId = randomUUID();
-  const host: Player = { id: hostId, name, seat: 1, connected: true };
+  const host: Player = { id: hostId, name, seat: 1, connected: true, disconnectedAt: null };
 
   const room: RoomServerState = {
     code: generateUniqueRoomCode(),
@@ -115,7 +115,7 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
 
   const seat = (room.players.length + 1) as 1 | 2 | 3 | 4;
   const id = randomUUID();
-  const player: Player = { id, name, seat, connected: true };
+  const player: Player = { id, name, seat, connected: true, disconnectedAt: null };
   room.players.push(player);
   room.chat.push({
     id: randomUUID(),
