@@ -1,5 +1,5 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { createRoom, joinRoom } from './rooms';
+import { createRoom, joinRoom, getRoom, setConnected, postChat, leaveRoom } from './rooms';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -7,17 +7,18 @@ import type {
 } from '@/shared/types';
 
 type SocketData = { sessionId?: string; roomCode?: string };
+type Srv = SocketIOServer<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 type SrvSocket = Socket<ClientToServerEvents, ServerToClientEvents, {}, SocketData>;
 
 function roomChannel(code: string): string {
   return `room:${code}`;
 }
 
-function broadcastState(io: SocketIOServer, room: Room): void {
+function broadcastState(io: Srv, room: Room): void {
   io.to(roomChannel(room.code)).emit('room:state', room);
 }
 
-export function attachSocketHandlers(io: SocketIOServer<ClientToServerEvents, ServerToClientEvents, {}, SocketData>): void {
+export function attachSocketHandlers(io: Srv): void {
   io.on('connection', (socket: SrvSocket) => {
     socket.on('room:create', ({ name }, cb) => {
       try {
@@ -26,8 +27,7 @@ export function attachSocketHandlers(io: SocketIOServer<ClientToServerEvents, Se
         socket.data.roomCode = room.code;
         socket.join(roomChannel(room.code));
         cb({ ok: true, sessionId, room });
-        // No broadcast needed yet; the creator is the only one in the room.
-      } catch (e) {
+      } catch {
         cb({ ok: false, error: 'NAME_INVALID' });
       }
     });
@@ -45,6 +45,29 @@ export function attachSocketHandlers(io: SocketIOServer<ClientToServerEvents, Se
       broadcastState(io, res.room);
     });
 
-    // disconnect / leave / start / chat wired in later tasks.
+    socket.on('chat:send', ({ text }) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) return;
+      const res = postChat({ code: roomCode, sessionId, text });
+      if (res.ok) broadcastState(io, res.room);
+    });
+
+    socket.on('room:leave', () => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) return;
+      const res = leaveRoom({ code: roomCode, sessionId });
+      socket.leave(roomChannel(roomCode));
+      socket.data.sessionId = undefined;
+      socket.data.roomCode = undefined;
+      if (res.ok && !res.wasLastPlayer && res.room) broadcastState(io, res.room);
+    });
+
+    socket.on('disconnect', () => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) return;
+      setConnected({ code: roomCode, sessionId, connected: false });
+      const room = getRoom(roomCode);
+      if (room) broadcastState(io, room);
+    });
   });
 }

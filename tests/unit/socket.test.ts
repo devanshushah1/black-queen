@@ -113,3 +113,52 @@ describe('socket: room:join', () => {
     c2.disconnect();
   });
 });
+
+describe('socket: disconnect', () => {
+  it('marks the player as disconnected and broadcasts updated state', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([
+      new Promise<void>((r) => host.on('connect', () => r())),
+      new Promise<void>((r) => guest.on('connect', () => r())),
+    ]);
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    await new Promise<void>((resolve) => {
+      host.once('room:state', () => resolve());
+      guest.emit('room:join', { code: created.room.code, name: 'Sam' }, () => {});
+    });
+
+    const hostStatePromise = new Promise<Room>((resolve) => host.once('room:state', resolve));
+    guest.disconnect();
+    const updated = await hostStatePromise;
+    const sam = updated.players.find((p) => p.name === 'Sam');
+    expect(sam?.connected).toBe(false);
+    host.disconnect();
+  });
+});
+
+describe('socket: chat:send', () => {
+  it('broadcasts chat to everyone in the room', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([
+      new Promise<void>((r) => host.on('connect', () => r())),
+      new Promise<void>((r) => guest.on('connect', () => r())),
+    ]);
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    await new Promise<void>((resolve) => {
+      host.once('room:state', () => resolve());
+      guest.emit('room:join', { code: created.room.code, name: 'Sam' }, () => {});
+    });
+
+    const hostStatePromise = new Promise<Room>((resolve) => host.once('room:state', resolve));
+    guest.emit('chat:send', { text: 'hello' });
+    const updated = await hostStatePromise;
+    const last = updated.chat[updated.chat.length - 1];
+    expect(last.text).toBe('hello');
+    expect(last.authorName).toBe('Sam');
+
+    host.disconnect();
+    guest.disconnect();
+  });
+});
