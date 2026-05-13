@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/client/useSocket';
 import { selectMe, useGameStore } from '@/client/store';
 import { JoinView } from '@/components/views/JoinView';
@@ -8,12 +8,14 @@ import { WaitingRoomView } from '@/components/views/WaitingRoomView';
 import { BiddingView } from '@/components/views/BiddingView';
 import { TrumpPartnerView } from '@/components/views/TrumpPartnerView';
 import { TrickPlayView } from '@/components/views/TrickPlayView';
+import { EndView } from '@/components/views/EndView';
 import type {
   BidActionAck,
   JoinRoomResult,
   StartGameResult,
   TrumpPartnerActionAck,
   PlayCardAck,
+  PlayAgainAck,
   Suit,
   Card,
 } from '@/shared/types';
@@ -21,6 +23,7 @@ import type {
 export default function RoomPage() {
   const params = useParams<{ code: string }>();
   const code = (params?.code ?? '').toUpperCase();
+  const router = useRouter();
   const socket = useSocket();
 
   const room = useGameStore((s) => s.room);
@@ -28,6 +31,7 @@ export default function RoomPage() {
   const yourHand = useGameStore((s) => s.yourHand);
   const setSession = useGameStore((s) => s.setSession);
   const setRoom = useGameStore((s) => s.setRoom);
+  const reset = useGameStore((s) => s.reset);
   const me = useGameStore(selectMe);
   const [bidBusy, setBidBusy] = useState(false);
   const [tpBusy, setTpBusy] = useState(false);
@@ -61,6 +65,16 @@ export default function RoomPage() {
       if (!res.ok) console.warn('Play failed:', res.error);
     });
   };
+  const handlePlayAgain = () => {
+    socket.emit('room:play-again', (res: PlayAgainAck) => {
+      if (!res.ok) console.warn('Play again failed:', res.error);
+    });
+  };
+  const handleLeave = () => {
+    socket.emit('room:leave');
+    reset();
+    router.push('/');
+  };
 
   if (!sessionId || !me) return <JoinView code={code} onSubmit={handleJoin} />;
   if (!room) return <main className="min-h-screen flex items-center justify-center text-neutral-500">Loading…</main>;
@@ -77,11 +91,8 @@ export default function RoomPage() {
   if (room.phase === 'play') {
     return <TrickPlayView room={room} me={me} yourHand={yourHand} onPlay={handleCardPlay} onSendChat={handleSendChat} />;
   }
-  return (
-    <main className="min-h-screen flex flex-col items-center justify-center gap-3 p-6">
-      <div className="text-gold-500 text-5xl font-serif">♛</div>
-      <div className="text-2xl font-bold">Phase: <span className="text-gold-500">{room.phase}</span></div>
-      <div className="text-xs text-neutral-500 mt-2">(Plan 4 will build the results screen.)</div>
-    </main>
-  );
+  if (room.phase === 'end') {
+    return <EndView room={room} me={me} sessionId={sessionId} onPlayAgain={handlePlayAgain} onLeave={handleLeave} onSendChat={handleSendChat} />;
+  }
+  return <main className="min-h-screen flex items-center justify-center text-neutral-500">Unknown phase: {room.phase}</main>;
 }
