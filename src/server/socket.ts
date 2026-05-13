@@ -1,5 +1,5 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
-import { createRoom, joinRoom, getRoom, setConnected, postChat, leaveRoom } from './rooms';
+import { createRoom, joinRoom, getRoom, setConnected, postChat, leaveRoom, startGame } from './rooms';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -41,8 +41,8 @@ export function attachSocketHandlers(io: Srv): void {
       socket.data.sessionId = res.sessionId;
       socket.data.roomCode = code;
       socket.join(roomChannel(code));
-      cb(res);
       broadcastState(io, res.room);
+      cb(res);
     });
 
     socket.on('chat:send', ({ text }) => {
@@ -60,6 +60,21 @@ export function attachSocketHandlers(io: Srv): void {
       socket.data.sessionId = undefined;
       socket.data.roomCode = undefined;
       if (res.ok && !res.wasLastPlayer && res.room) broadcastState(io, res.room);
+    });
+
+    socket.on('room:start', (cb) => {
+      const { sessionId, roomCode } = socket.data;
+      if (!sessionId || !roomCode) {
+        cb({ ok: false, error: 'NOT_HOST' });
+        return;
+      }
+      const res = startGame({ code: roomCode, sessionId });
+      if (!res.ok) {
+        cb({ ok: false, error: res.error });
+        return;
+      }
+      cb({ ok: true });
+      if (res.room) broadcastState(io, res.room);
     });
 
     socket.on('disconnect', () => {

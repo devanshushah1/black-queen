@@ -162,3 +162,57 @@ describe('socket: chat:send', () => {
     guest.disconnect();
   });
 });
+
+describe('socket: room:start', () => {
+  it('lets the host start with 4 players; phase becomes bidding for everyone', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+
+    const [host, c2, c3, c4] = clients;
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const code = created.room.code;
+    for (const [client, name] of [[c2, 'Sam'], [c3, 'Riya'], [c4, 'Aman']] as const) {
+      await new Promise<void>((resolve) =>
+        client.emit('room:join', { code, name }, () => resolve())
+      );
+    }
+
+    // Listen for the state update on all clients
+    const statePromises = clients.map((c) => new Promise<Room>((resolve) => c.once('room:state', resolve)));
+
+    const res: any = await new Promise((resolve) => host.emit('room:start', resolve));
+    expect(res.ok).toBe(true);
+
+    const states = await Promise.all(statePromises);
+    for (const state of states) {
+      expect(state.phase).toBe('bidding');
+    }
+    clients.forEach((c) => c.disconnect());
+  });
+
+  it('rejects a non-host with NOT_HOST', async () => {
+    const host = makeClient();
+    const guest = makeClient();
+    await Promise.all([
+      new Promise<void>((r) => host.on('connect', () => r())),
+      new Promise<void>((r) => guest.on('connect', () => r())),
+    ]);
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    await new Promise((resolve) => guest.emit('room:join', { code: created.room.code, name: 'Sam' }, resolve));
+    const res: any = await new Promise((resolve) => guest.emit('room:start', resolve));
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('NOT_HOST');
+    host.disconnect();
+    guest.disconnect();
+  });
+
+  it('rejects with NEED_FOUR when fewer than 4 players', async () => {
+    const host = makeClient();
+    await new Promise<void>((r) => host.on('connect', () => r()));
+    await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const res: any = await new Promise((resolve) => host.emit('room:start', resolve));
+    expect(res.ok).toBe(false);
+    expect(res.error).toBe('NEED_FOUR');
+    host.disconnect();
+  });
+});
