@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CardBack } from './CardBack';
 import type { Seat } from '@/shared/types';
+import { playSound } from '@/client/sounds';
 
 interface Props {
   viewerSeat: Seat;
@@ -41,8 +42,16 @@ export function DealAnimation({ viewerSeat, onDone }: Props) {
   const order = buildDealOrder(viewerSeat);
 
   useEffect(() => {
+    playSound('shuffle');
+    const whips: number[] = [];
+    for (let i = 0; i < 52; i++) {
+      whips.push(window.setTimeout(() => playSound('whip'), i * PER_CARD_DELAY * 1000));
+    }
     const t = setTimeout(onDone, TOTAL_DURATION_MS);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      whips.forEach((id) => clearTimeout(id));
+    };
   }, [onDone]);
 
   return (

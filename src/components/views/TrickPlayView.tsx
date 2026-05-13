@@ -12,6 +12,7 @@ import { MuteToggle } from '@/components/MuteToggle';
 import { cardKey } from '@/shared/types';
 import { Card as CardComponent } from '@/components/Card';
 import { LayoutGroup, motion } from 'framer-motion';
+import { playSound } from '@/client/sounds';
 
 interface Props {
   room: RoomView;
@@ -108,6 +109,16 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
     }
   }
 
+  // --- Thump on each new play in the current trick ---
+  const lastPlaysCount = useRef(0);
+  useEffect(() => {
+    const cur = trick?.plays.length ?? 0;
+    if (cur > lastPlaysCount.current) {
+      playSound('thump');
+    }
+    lastPlaysCount.current = cur;
+  }, [trick?.plays.length]);
+
   // --- Trick collection animation state machine ---
   // The server resolves tricks immediately (CurrentTrick never has winnerSeat),
   // so we detect newly completed tricks via game.completedTricks.
@@ -123,7 +134,10 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
       setAnimatingTrick({ plays: justCompleted.plays, winnerSeat: justCompleted.winnerSeat });
       setCollectPhase('pause');
       const t1 = setTimeout(() => setCollectPhase('pulse'), 700);
-      const t2 = setTimeout(() => setCollectPhase('collect'), 700 + 400);
+      const t2 = setTimeout(() => {
+        setCollectPhase('collect');
+        playSound('sweep');
+      }, 700 + 400);
       const t3 = setTimeout(() => {
         setCollectPhase('idle');
         setAnimatingTrick(null);
