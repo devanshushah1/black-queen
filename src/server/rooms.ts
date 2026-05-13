@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import {
-  type Room,
+  type RoomServerState,
   type Player,
+  type Room,
   type JoinRoomResult,
   MAX_NAME_LENGTH,
-  MAX_PLAYERS,
   MIN_NAME_LENGTH,
+  MAX_PLAYERS,
   ROOM_CODE_LENGTH,
 } from '@/shared/types';
+import { createDeck, shuffle, deal } from './game/deck';
+import { emptyBidState } from './game/bidding';
 
 // In-memory store; process-local. Fine for single-instance hobby deploys.
-const rooms = new Map<string, Room>();
+const rooms = new Map<string, RoomServerState>();
 
 /** Visible for tests only. */
 export function _resetRoomsForTest(): void {
@@ -50,7 +53,7 @@ export interface CreateRoomInput {
 }
 
 export interface CreateRoomOutput {
-  room: Room;
+  room: RoomServerState;
   sessionId: string;
 }
 
@@ -59,20 +62,24 @@ export function createRoom(input: CreateRoomInput): CreateRoomOutput {
   const hostId = randomUUID();
   const host: Player = { id: hostId, name, seat: 1, connected: true };
 
-  const room: Room = {
+  const room: RoomServerState = {
     code: generateUniqueRoomCode(),
     hostId,
     phase: 'lobby',
     players: [host],
-    chat: [{ id: randomUUID(), authorId: null, authorName: null, text: `${name} created the room`, ts: Date.now() }],
+    chat: [
+      { id: randomUUID(), authorId: null, authorName: null, text: `${name} created the room`, ts: Date.now() },
+    ],
     createdAt: Date.now(),
+    game: null,
+    hands: null,
   };
 
   rooms.set(room.code, room);
   return { room, sessionId: hostId };
 }
 
-export function getRoom(code: string): Room | undefined {
+export function getRoom(code: string): RoomServerState | undefined {
   return rooms.get(code);
 }
 
@@ -111,11 +118,13 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
     ts: Date.now(),
   });
 
-  return { ok: true, sessionId: id, room };
+  // JoinRoomResult wire shape uses Room (public). Since RoomServerState extends Room,
+  // we can pass it directly — TypeScript widens.
+  return { ok: true, sessionId: id, room: room as unknown as Room };
 }
 
 type LeaveRoomResult =
-  | { ok: true; room: Room; wasLastPlayer: false }
+  | { ok: true; room: RoomServerState; wasLastPlayer: false }
   | { ok: true; room: null; wasLastPlayer: true }
   | { ok: false; error: 'NOT_FOUND' | 'NOT_IN_ROOM' };
 
@@ -161,7 +170,7 @@ export function leaveRoom(input: LeaveRoomInput): LeaveRoomResult {
 }
 
 type PostChatResult =
-  | { ok: true; room: Room }
+  | { ok: true; room: RoomServerState }
   | { ok: false; error: 'NOT_FOUND' | 'NOT_IN_ROOM' | 'INVALID_TEXT' };
 
 export interface PostChatInput {
@@ -207,7 +216,7 @@ export interface StartGameInput {
  * type; the room comes through `room:state` instead.
  */
 type StartGameInternalResult =
-  | { ok: true; room: Room }
+  | { ok: true; room: RoomServerState }
   | { ok: false; error: 'NOT_HOST' | 'NEED_FOUR' };
 
 export function startGame(input: StartGameInput): StartGameInternalResult {
@@ -217,7 +226,11 @@ export function startGame(input: StartGameInput): StartGameInternalResult {
   if (room.hostId !== input.sessionId) return { ok: false, error: 'NOT_HOST' };
   if (room.players.length < MAX_PLAYERS) return { ok: false, error: 'NEED_FOUR' };
 
+  const deck = shuffle(createDeck());
+  room.hands = deal(deck);
+  room.game = { bid: emptyBidState() };
   room.phase = 'bidding';
+
   return { ok: true, room };
 }
 

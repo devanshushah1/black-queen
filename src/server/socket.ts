@@ -1,10 +1,10 @@
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { createRoom, joinRoom, getRoom, setConnected, postChat, leaveRoom, startGame } from './rooms';
+import { toRoomView } from './game/view';
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
-  Room,
-  RoomView,
+  RoomServerState,
 } from '@/shared/types';
 
 type SocketData = { sessionId?: string; roomCode?: string };
@@ -15,9 +15,8 @@ function roomChannel(code: string): string {
   return `room:${code}`;
 }
 
-function broadcastState(io: Srv, room: Room): void {
-  const view: RoomView = { ...room, game: null };
-  io.to(roomChannel(room.code)).emit('room:state', view);
+function broadcastState(io: Srv, room: RoomServerState): void {
+  io.to(roomChannel(room.code)).emit('room:state', toRoomView(room));
 }
 
 export function attachSocketHandlers(io: Srv): void {
@@ -28,7 +27,7 @@ export function attachSocketHandlers(io: Srv): void {
         socket.data.sessionId = sessionId;
         socket.data.roomCode = room.code;
         socket.join(roomChannel(room.code));
-        cb({ ok: true, sessionId, room });
+        cb({ ok: true, sessionId, room: toRoomView(room) });
       } catch {
         cb({ ok: false, error: 'NAME_INVALID' });
       }
@@ -43,8 +42,9 @@ export function attachSocketHandlers(io: Srv): void {
       socket.data.sessionId = res.sessionId;
       socket.data.roomCode = code;
       socket.join(roomChannel(code));
-      broadcastState(io, res.room);
-      cb(res);
+      const stored = getRoom(code);
+      if (stored) broadcastState(io, stored);
+      cb({ ok: true, sessionId: res.sessionId, room: stored ? toRoomView(stored) : res.room });
     });
 
     socket.on('chat:send', ({ text }) => {
