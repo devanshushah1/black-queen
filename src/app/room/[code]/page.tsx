@@ -36,7 +36,7 @@ export default function WaitingRoomPage() {
 
   useEffect(() => {
     if (room && room.phase !== 'lobby') router.push('/game-starting');
-  }, [room?.phase, router]);
+  }, [room, router]);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();

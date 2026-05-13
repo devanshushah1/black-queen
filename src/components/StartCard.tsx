@@ -25,7 +25,7 @@ export function StartCard({ filled, isHost, onStart }: StartCardProps) {
         Players ready
       </div>
       <div className="text-2xl font-bold">
-        <span className={ready ? 'text-gold-500' : 'text-gold-500'}>{filled}</span>
+        <span className="text-gold-500">{filled}</span>
         <span className="text-neutral-500">/4</span>
       </div>
       <div className={ready ? 'text-[10px] text-gold-500 mb-2.5' : 'text-[10px] text-neutral-400 mb-2.5'}>
