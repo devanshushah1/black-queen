@@ -331,3 +331,151 @@ describe('socket: bid:place + bid:pass', () => {
     clients.forEach((c) => c.disconnect());
   });
 });
+
+async function setupAndStart(makeClient: () => any, host: any, c2: any, c3: any, c4: any) {
+  const handPromises = [host, c2, c3, c4].map((c) => new Promise<{ hand: any[] }>((resolve) => {
+    c.once('hand:update', (p: any) => resolve(p));
+  }));
+
+  const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+  const code = created.room.code;
+  for (const [client, name] of [[c2, 'Sam'], [c3, 'Riya'], [c4, 'Aman']] as const) {
+    await new Promise<void>((resolve) => client.emit('room:join', { code, name }, () => resolve()));
+  }
+
+  // Register the trump_partner-phase listener BEFORE any action that could
+  // trigger that broadcast, otherwise we'll race the emit.
+  const trumpPartnerPromises = [host, c2, c3, c4].map((c) => new Promise<void>((resolve) => {
+    const h = (s: any) => { if (s.phase === 'trump_partner') { c.off('room:state', h); resolve(); } };
+    c.on('room:state', h);
+  }));
+
+  await new Promise((resolve) => host.emit('room:start', resolve));
+  const handPayloads = await Promise.all(handPromises);
+  const hands: Record<number, any[]> = {};
+  handPayloads.forEach((p, i) => { hands[i + 1] = p.hand; });
+
+  // host (seat 1) bids 90; everyone passes -> bidding complete -> phase trump_partner
+  await new Promise((resolve) => host.emit('bid:place', { amount: 90 }, resolve));
+  for (const c of [c2, c3, c4]) {
+    await new Promise((resolve) => c.emit('bid:pass', resolve));
+  }
+  await Promise.all(trumpPartnerPromises);
+
+  return { code, hands };
+}
+
+describe('socket: trump:choose', () => {
+  it('bidder picks trump + an opponent card; phase advances to play', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const { hands } = await setupAndStart(makeClient, host, c2, c3, c4);
+
+    // Register state listeners on all clients BEFORE emitting
+    const statePromises = clients.map((c) => new Promise<any>((resolve) => {
+      const h = (s: any) => {
+        if (s.phase === 'play' && s.game?.trumpPartner) { c.off('room:state', h); resolve(s); }
+      };
+      c.on('room:state', h);
+    }));
+
+    const target = hands[2][0]; // Seat 2's first card; not in host's hand
+    const ack: any = await new Promise((resolve) =>
+      host.emit('trump:choose', { trump: 'spades', calledCard: target }, resolve)
+    );
+    expect(ack.ok).toBe(true);
+
+    const states = await Promise.all(statePromises);
+    for (const state of states) {
+      expect(state.phase).toBe('play');
+      expect(state.game.trumpPartner.trump).toBe('spades');
+      // partnerSeat must NOT leak
+      expect('partnerSeat' in state.game).toBe(false);
+    }
+
+    clients.forEach((c) => c.disconnect());
+  });
+
+  it('rejects non-bidder with NOT_BIDDER', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const { hands } = await setupAndStart(makeClient, host, c2, c3, c4);
+
+    // c2 (not the bidder) tries to choose
+    const ack: any = await new Promise((resolve) =>
+      c2.emit('trump:choose', { trump: 'spades', calledCard: hands[1][0] }, resolve)
+    );
+    expect(ack.ok).toBe(false);
+    expect(ack.error).toBe('NOT_BIDDER');
+
+    clients.forEach((c) => c.disconnect());
+  });
+});
+
+describe('socket: card:play', () => {
+  it('bidder plays first card; ledSuit set; trick has 1 play', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const { hands } = await setupAndStart(makeClient, host, c2, c3, c4);
+
+    // Register phase=play listeners BEFORE trump:choose so we don't race the broadcast.
+    const playPhasePromises = clients.map((c) => new Promise<void>((resolve) => {
+      const h = (s: any) => { if (s.phase === 'play') { c.off('room:state', h); resolve(); } };
+      c.on('room:state', h);
+    }));
+
+    // Trump choose first (bidder = seat 1)
+    await new Promise((resolve) =>
+      host.emit('trump:choose', { trump: 'spades', calledCard: hands[2][0] }, resolve)
+    );
+    await Promise.all(playPhasePromises);
+
+    // Register listener BEFORE play
+    const playState = new Promise<any>((resolve) => {
+      const h = (s: any) => {
+        if (s.game?.currentTrick && s.game.currentTrick.plays.length === 1) {
+          c2.off('room:state', h);
+          resolve(s);
+        }
+      };
+      c2.on('room:state', h);
+    });
+
+    const firstCard = hands[1][0];
+    const ack: any = await new Promise((resolve) => host.emit('card:play', { card: firstCard }, resolve));
+    expect(ack.ok).toBe(true);
+
+    const state = await playState;
+    expect(state.game.currentTrick.plays).toHaveLength(1);
+    expect(state.game.currentTrick.ledSuit).toBe(firstCard.suit);
+
+    clients.forEach((c) => c.disconnect());
+  });
+
+  it('rejects NOT_YOUR_TURN when non-leader tries to play first', async () => {
+    const clients = [makeClient(), makeClient(), makeClient(), makeClient()];
+    await Promise.all(clients.map((c) => new Promise<void>((r) => c.on('connect', () => r()))));
+    const [host, c2, c3, c4] = clients;
+    const { hands } = await setupAndStart(makeClient, host, c2, c3, c4);
+
+    // Register phase=play listeners BEFORE trump:choose so we don't race the broadcast.
+    const playPhasePromises = clients.map((c) => new Promise<void>((resolve) => {
+      const h = (s: any) => { if (s.phase === 'play') { c.off('room:state', h); resolve(); } };
+      c.on('room:state', h);
+    }));
+
+    await new Promise((resolve) =>
+      host.emit('trump:choose', { trump: 'spades', calledCard: hands[2][0] }, resolve)
+    );
+    await Promise.all(playPhasePromises);
+
+    const ack: any = await new Promise((resolve) => c2.emit('card:play', { card: hands[2][0] }, resolve));
+    expect(ack.ok).toBe(false);
+    expect(ack.error).toBe('NOT_YOUR_TURN');
+
+    clients.forEach((c) => c.disconnect());
+  });
+});
