@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { CardBack } from './CardBack';
 import type { Seat } from '@/shared/types';
 import { playSound } from '@/client/sounds';
+import { useReducedMotion } from '@/client/useReducedMotion';
 
 interface Props {
   viewerSeat: Seat;
@@ -40,8 +41,13 @@ const TOTAL_DURATION_MS = 2100 + 600; // deal + flip ripple + small settle
 
 export function DealAnimation({ viewerSeat, onDone }: Props) {
   const order = buildDealOrder(viewerSeat);
+  const reduced = useReducedMotion();
 
   useEffect(() => {
+    if (reduced) {
+      onDone();
+      return;
+    }
     playSound('shuffle');
     const whips: number[] = [];
     for (let i = 0; i < 52; i++) {
@@ -52,7 +58,7 @@ export function DealAnimation({ viewerSeat, onDone }: Props) {
       clearTimeout(t);
       whips.forEach((id) => clearTimeout(id));
     };
-  }, [onDone]);
+  }, [onDone, reduced]);
 
   return (
     <div
@@ -85,8 +91,8 @@ export function DealAnimation({ viewerSeat, onDone }: Props) {
               opacity: [0, 1, 1, 1],
             }}
             transition={{
-              delay: i * PER_CARD_DELAY,
-              duration: FLIGHT_DURATION,
+              delay: reduced ? 0 : i * PER_CARD_DELAY,
+              duration: reduced ? 0 : FLIGHT_DURATION,
               ease: [0.2, 0.7, 0.2, 1],
               times: [0, 0.15, 0.85, 1],
             }}

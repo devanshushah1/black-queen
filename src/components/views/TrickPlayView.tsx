@@ -13,6 +13,7 @@ import { cardKey } from '@/shared/types';
 import { Card as CardComponent } from '@/components/Card';
 import { LayoutGroup, motion } from 'framer-motion';
 import { playSound } from '@/client/sounds';
+import { useReducedMotion } from '@/client/useReducedMotion';
 
 interface Props {
   room: RoomView;
@@ -43,10 +44,12 @@ function CollectingPile({
   plays,
   viewerSeat,
   winnerSeat,
+  reduced,
 }: {
   plays: PlayedCard[];
   viewerSeat: Seat;
   winnerSeat: Seat;
+  reduced: boolean;
 }) {
   const target = seatScreenOffset(viewerSeat, winnerSeat);
   return (
@@ -57,7 +60,7 @@ function CollectingPile({
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
           initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
           animate={{ x: target.x, y: target.y, opacity: 0, scale: 0.7 }}
-          transition={{ duration: 0.5, ease: [0.2, 0.7, 0.2, 1], delay: i * 0.02 }}
+          transition={{ duration: reduced ? 0 : 0.5, ease: [0.2, 0.7, 0.2, 1], delay: reduced ? 0 : i * 0.02 }}
         >
           <CardComponent card={card} size="lg" />
         </motion.div>
@@ -82,6 +85,7 @@ function opponentCardCount(room: RoomView, seat: Seat): number {
 export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props) {
   const game = room.game!;
   const layout = rotate(me.seat);
+  const reduced = useReducedMotion();
 
   const bidderSeat = game.bid.currentBidderSeat;
   const bidderName = seatNameFor(room.players, bidderSeat);
@@ -132,6 +136,15 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
       const justCompleted = game.completedTricks[currentCount - 1];
       lastCompletedCount.current = currentCount;
       setAnimatingTrick({ plays: justCompleted.plays, winnerSeat: justCompleted.winnerSeat });
+      if (reduced) {
+        setCollectPhase('collect');
+        playSound('sweep');
+        const t = setTimeout(() => {
+          setCollectPhase('idle');
+          setAnimatingTrick(null);
+        }, 100);
+        return () => clearTimeout(t);
+      }
       setCollectPhase('pause');
       const t1 = setTimeout(() => setCollectPhase('pulse'), 700);
       const t2 = setTimeout(() => {
@@ -149,7 +162,7 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
       };
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game.completedTricks.length]);
+  }, [game.completedTricks.length, reduced]);
 
   return (
     <main className="min-h-screen relative bg-felt-900 p-6">
@@ -183,7 +196,7 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
               />
             )}
             {animatingTrick && collectPhase === 'collect' && (
-              <CollectingPile plays={animatingTrick.plays} viewerSeat={me.seat} winnerSeat={animatingTrick.winnerSeat} />
+              <CollectingPile plays={animatingTrick.plays} viewerSeat={me.seat} winnerSeat={animatingTrick.winnerSeat} reduced={reduced} />
             )}
             {!animatingTrick && trick && (
               <PlayedCardsCenter plays={trick.plays} viewerSeat={me.seat} />
