@@ -1,15 +1,18 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { useParams } from 'next/navigation';
 import { useSocket } from '@/client/useSocket';
 import { selectMe, useGameStore } from '@/client/store';
 import { Seat } from '@/components/Seat';
 import { InviteCard } from '@/components/InviteCard';
 import { StartCard } from '@/components/StartCard';
 import { ChatPanel } from '@/components/ChatPanel';
-import type { JoinRoomResult, Player, StartGameResult } from '@/shared/types';
+import { BidPanel } from '@/components/bidding/BidPanel';
+import { StatusPill } from '@/components/bidding/StatusPill';
+import { HandPreview } from '@/components/bidding/HandPreview';
+import type { JoinRoomResult, Player, StartGameResult, BidActionAck, Seat as SeatT } from '@/shared/types';
 
-function rotateSeats(viewerSeat: 1 | 2 | 3 | 4) {
+function rotateSeats(viewerSeat: SeatT) {
   return {
     bottom: viewerSeat,
     left: (viewerSeat % 4) + 1,
@@ -18,14 +21,14 @@ function rotateSeats(viewerSeat: 1 | 2 | 3 | 4) {
   };
 }
 
-export default function WaitingRoomPage() {
+export default function RoomPage() {
   const params = useParams<{ code: string }>();
   const code = (params?.code ?? '').toUpperCase();
-  const router = useRouter();
   const socket = useSocket();
 
   const room = useGameStore((s) => s.room);
   const sessionId = useGameStore((s) => s.sessionId);
+  const yourHand = useGameStore((s) => s.yourHand);
   const setSession = useGameStore((s) => s.setSession);
   const setRoom = useGameStore((s) => s.setRoom);
   const me = useGameStore(selectMe);
@@ -33,18 +36,12 @@ export default function WaitingRoomPage() {
   const [joinName, setJoinName] = useState('');
   const [joinErr, setJoinErr] = useState<string | null>(null);
   const [joinBusy, setJoinBusy] = useState(false);
-
-  useEffect(() => {
-    if (room && room.phase !== 'lobby') router.push('/game-starting');
-  }, [room, router]);
+  const [bidBusy, setBidBusy] = useState(false);
 
   async function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     setJoinErr(null);
-    if (!joinName.trim()) {
-      setJoinErr('Pick a display name');
-      return;
-    }
+    if (!joinName.trim()) { setJoinErr('Pick a display name'); return; }
     setJoinBusy(true);
     const res = await new Promise<JoinRoomResult>((resolve) =>
       socket.emit('room:join', { code, name: joinName.trim() }, resolve)
@@ -63,7 +60,6 @@ export default function WaitingRoomPage() {
     setRoom(res.room);
   }
 
-  // Not in the room yet — show the join form.
   if (!sessionId || !me) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center gap-5 p-6">
@@ -74,7 +70,6 @@ export default function WaitingRoomPage() {
         <div className="w-80 bg-black/40 border border-white/10 rounded-xl p-5">
           <div className="text-center text-xs text-neutral-400">You&apos;ve been invited to room</div>
           <div className="text-center text-lg font-mono font-bold text-gold-500 mt-1">{code}</div>
-
           <form onSubmit={handleJoin} className="mt-4 space-y-3">
             <div>
               <label className="block text-xs uppercase tracking-wider text-neutral-400 mb-1">Your display name</label>
@@ -100,77 +95,126 @@ export default function WaitingRoomPage() {
     );
   }
 
-  // In the room — render the waiting room.
+  if (!room) {
+    return <main className="min-h-screen flex items-center justify-center text-neutral-500">Loading…</main>;
+  }
+
   const seatLayout = rotateSeats(me.seat);
   const playerAt = (seat: number): Player | null =>
-    room?.players.find((p) => p.seat === seat) ?? null;
+    room.players.find((p) => p.seat === seat) ?? null;
 
   function handleStart() {
     socket.emit('room:start', (res: StartGameResult) => {
       if (!res.ok) console.warn('Start failed:', res.error);
     });
   }
-
   function handleSendChat(text: string) {
     socket.emit('chat:send', { text });
   }
-
-  if (!room) {
-    return <main className="min-h-screen flex items-center justify-center text-neutral-500">Loading…</main>;
+  function handleBid(amount: number) {
+    setBidBusy(true);
+    socket.emit('bid:place', { amount }, (res: BidActionAck) => {
+      setBidBusy(false);
+      if (!res.ok) console.warn('Bid failed:', res.error);
+    });
+  }
+  function handlePass() {
+    setBidBusy(true);
+    socket.emit('bid:pass', (res: BidActionAck) => {
+      setBidBusy(false);
+      if (!res.ok) console.warn('Pass failed:', res.error);
+    });
   }
 
   const inviteUrl = typeof window !== 'undefined' ? `${window.location.origin}/room/${room.code}` : `/room/${room.code}`;
   const isHost = room.hostId === sessionId;
   const isFull = room.players.length >= 4;
 
+  if (room.phase === 'lobby') {
+    return (
+      <main className="min-h-screen p-6">
+        <div className="flex items-center justify-between mb-4 max-w-3xl mx-auto">
+          <div>
+            <div className="text-[9px] uppercase tracking-widest text-neutral-400">Room</div>
+            <div className="text-xl font-bold text-gold-500 font-mono tracking-widest">{room.code}</div>
+          </div>
+          <div className="text-right">
+            <div className="text-[9px] uppercase tracking-widest text-neutral-400">Players</div>
+            <div className="text-sm font-semibold text-gold-500">{room.players.length} / 4</div>
+          </div>
+        </div>
+
+        <div className="relative mx-auto max-w-3xl h-72">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2"><Seat player={playerAt(seatLayout.top)} seatLabel={`seat ${seatLayout.top}`} isHost={!!playerAt(seatLayout.top) && playerAt(seatLayout.top)!.id === room.hostId} /></div>
+          <div className="absolute top-1/2 left-8 -translate-y-1/2"><Seat player={playerAt(seatLayout.left)} seatLabel={`seat ${seatLayout.left}`} isHost={!!playerAt(seatLayout.left) && playerAt(seatLayout.left)!.id === room.hostId} /></div>
+          <div className="absolute top-1/2 right-8 -translate-y-1/2"><Seat player={playerAt(seatLayout.right)} seatLabel={`seat ${seatLayout.right}`} isHost={!!playerAt(seatLayout.right) && playerAt(seatLayout.right)!.id === room.hostId} /></div>
+          <div className="absolute bottom-0 left-1/2 -translate-x-1/2"><Seat player={me} seatLabel={`seat ${seatLayout.bottom}`} isYou isHost={isHost} /></div>
+        </div>
+
+        <div className="flex justify-center gap-4 mt-4">
+          <InviteCard code={room.code} url={inviteUrl} disabled={isFull} />
+          <StartCard filled={room.players.length} isHost={isHost} onStart={handleStart} />
+        </div>
+
+        <div className="fixed bottom-3 right-3"><ChatPanel messages={room.chat} onSend={handleSendChat} /></div>
+      </main>
+    );
+  }
+
+  if (room.phase === 'bidding') {
+    const bid = room.game!.bid;
+    const seatStatus = (seat: number) => {
+      if (bid.currentBidderSeat === seat) return { variant: 'bidder' as const, label: `bid ${bid.currentBid}` };
+      if (bid.passedSeats.includes(seat as SeatT)) return { variant: 'passed' as const, label: 'passed' };
+      return { variant: 'live' as const, label: 'deciding…', pulse: true };
+    };
+
+    return (
+      <main className="min-h-screen p-6">
+        <div className="max-w-3xl mx-auto">
+          <div className="text-center mb-4">
+            <div className="text-[10px] uppercase tracking-widest text-gold-500 font-bold">Bidding phase</div>
+            <div className="text-xs text-neutral-400 mt-1">Min 75 · Max 150 · Increments of 5</div>
+          </div>
+
+          <div className="relative h-56 mb-4">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
+              <div className="text-sm font-semibold">{playerAt(seatLayout.top)?.name}</div>
+              <StatusPill {...seatStatus(seatLayout.top)} />
+            </div>
+            <div className="absolute top-1/2 left-8 -translate-y-1/2 text-center">
+              <div className="text-sm font-semibold">{playerAt(seatLayout.left)?.name}</div>
+              <StatusPill {...seatStatus(seatLayout.left)} />
+            </div>
+            <div className="absolute top-1/2 right-8 -translate-y-1/2 text-center">
+              <div className="text-sm font-semibold">{playerAt(seatLayout.right)?.name}</div>
+              <StatusPill {...seatStatus(seatLayout.right)} />
+            </div>
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
+              <BidPanel bid={bid} yourSeat={me.seat} busy={bidBusy} onBid={handleBid} onPass={handlePass} />
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <div className="text-[10px] uppercase tracking-widest text-neutral-500 text-center mb-2">your hand</div>
+            <HandPreview hand={yourHand} />
+            <div className="text-center mt-3">
+              <span className="text-sm font-semibold">{me.name}</span>
+              <span className="ml-2"><StatusPill {...seatStatus(me.seat)} /></span>
+            </div>
+          </div>
+        </div>
+
+        <div className="fixed bottom-3 right-3"><ChatPanel messages={room.chat} onSend={handleSendChat} /></div>
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen p-6">
-      <div className="flex items-center justify-between mb-4 max-w-3xl mx-auto">
-        <div>
-          <div className="text-[9px] uppercase tracking-widest text-neutral-400">Room</div>
-          <div className="text-xl font-bold text-gold-500 font-mono tracking-widest">{room.code}</div>
-        </div>
-        <div className="text-right">
-          <div className="text-[9px] uppercase tracking-widest text-neutral-400">Players</div>
-          <div className="text-sm font-semibold text-gold-500">{room.players.length} / 4</div>
-        </div>
-      </div>
-
-      <div className="relative mx-auto max-w-3xl h-72">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2">
-          <Seat
-            player={playerAt(seatLayout.top)}
-            seatLabel={`seat ${seatLayout.top}`}
-            isHost={!!playerAt(seatLayout.top) && playerAt(seatLayout.top)!.id === room.hostId}
-          />
-        </div>
-        <div className="absolute top-1/2 left-8 -translate-y-1/2">
-          <Seat
-            player={playerAt(seatLayout.left)}
-            seatLabel={`seat ${seatLayout.left}`}
-            isHost={!!playerAt(seatLayout.left) && playerAt(seatLayout.left)!.id === room.hostId}
-          />
-        </div>
-        <div className="absolute top-1/2 right-8 -translate-y-1/2">
-          <Seat
-            player={playerAt(seatLayout.right)}
-            seatLabel={`seat ${seatLayout.right}`}
-            isHost={!!playerAt(seatLayout.right) && playerAt(seatLayout.right)!.id === room.hostId}
-          />
-        </div>
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
-          <Seat player={me} seatLabel={`seat ${seatLayout.bottom}`} isYou isHost={isHost} />
-        </div>
-      </div>
-
-      <div className="flex justify-center gap-4 mt-4">
-        <InviteCard code={room.code} url={inviteUrl} disabled={isFull} />
-        <StartCard filled={room.players.length} isHost={isHost} onStart={handleStart} />
-      </div>
-
-      <div className="fixed bottom-3 right-3">
-        <ChatPanel messages={room.chat} onSend={handleSendChat} />
-      </div>
+    <main className="min-h-screen flex flex-col items-center justify-center gap-3 p-6">
+      <div className="text-gold-500 text-5xl font-serif">♛</div>
+      <div className="text-2xl font-bold">Phase: <span className="text-gold-500">{room.phase}</span></div>
+      <div className="text-xs text-neutral-500 mt-2">(Plan 3 builds this UI.)</div>
     </main>
   );
 }
