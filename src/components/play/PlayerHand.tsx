@@ -1,14 +1,13 @@
 'use client';
 import { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Card } from '@/components/Card';
 import type { Card as CardType } from '@/shared/types';
 import { cardKey } from '@/shared/types';
 
 interface Props {
   hand: CardType[];
-  /** Which cards are legal to play right now. If null, all are legal. */
   legalKeys: Set<string> | null;
-  /** When true, your turn; otherwise hand is view-only. */
   active: boolean;
   onPlay: (card: CardType) => void;
 }
@@ -31,8 +30,9 @@ export function PlayerHand({ hand, legalKeys, active, onPlay }: Props) {
   const sorted = sortHand(hand);
   const [stagedKey, setStagedKey] = useState<string | null>(null);
   const n = sorted.length;
-  const maxRot = 22;
+  const maxRot = 18;                       // ~36° total spread
   const step = n > 1 ? (maxRot * 2) / (n - 1) : 0;
+  const overlap = 38;                      // px overlap between adjacent cards
 
   function handleClick(card: CardType) {
     if (!active) return;
@@ -47,7 +47,7 @@ export function PlayerHand({ hand, legalKeys, active, onPlay }: Props) {
   }
 
   return (
-    <div className="relative h-32">
+    <div className="relative h-44">
       <div className="flex justify-center items-end h-full">
         {sorted.map((card, i) => {
           const k = cardKey(card);
@@ -55,19 +55,30 @@ export function PlayerHand({ hand, legalKeys, active, onPlay }: Props) {
           const isStaged = stagedKey === k;
           const isLegal = !legalKeys || legalKeys.has(k);
           const dim = active && !isLegal;
+          const isHoverable = active && isLegal;
+
           return (
-            <div
+            <motion.div
               key={k}
+              layoutId={`card-${k}`}
               onClick={() => handleClick(card)}
-              className={`transition-transform cursor-pointer ${active && isLegal ? 'hover:-translate-y-3' : ''} ${dim ? 'opacity-30 cursor-not-allowed' : ''}`}
+              className={`${isHoverable ? 'cursor-pointer' : ''} ${dim ? 'cursor-not-allowed' : ''}`}
               style={{
-                marginLeft: i === 0 ? 0 : '-26px',
-                transform: `rotate(${rot}deg) ${isStaged ? 'translateY(-32px) scale(1.1)' : ''}`,
+                marginLeft: i === 0 ? 0 : `-${overlap}px`,
                 zIndex: isStaged ? 50 : i,
+                transformOrigin: 'bottom center',
               }}
+              initial={false}
+              animate={{
+                rotate: rot,
+                y: isStaged ? -60 : 0,
+                scale: isStaged ? 1.05 : 1,
+              }}
+              whileHover={isHoverable && !isStaged ? { y: -12 } : undefined}
+              transition={{ duration: 0.18, ease: [0.2, 0.7, 0.2, 1] }}
             >
-              <Card card={card} size="md" />
-            </div>
+              <Card card={card} size="xl" dim={dim} />
+            </motion.div>
           );
         })}
       </div>
