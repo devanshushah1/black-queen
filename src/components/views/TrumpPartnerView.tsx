@@ -5,6 +5,7 @@ import { WaitingForChoice } from '@/components/trump-partner/WaitingForChoice';
 import { HandPreview } from '@/components/bidding/HandPreview';
 import { ChatPanel } from '@/components/ChatPanel';
 import { seatNameFor } from '@/components/shared/seatNameFor';
+import { MuteToggle } from '@/components/MuteToggle';
 
 interface Props {
   room: RoomView;
@@ -22,6 +23,7 @@ export function TrumpPartnerView({ room, me, yourHand, busy, onConfirm, onSendCh
 
   return (
     <main className="min-h-screen p-6 flex flex-col items-center gap-4">
+      <MuteToggle />
       <div className="text-center">
         <div className="text-[10px] uppercase tracking-widest text-gold-500 font-bold">Trump &amp; partner</div>
         <div className="text-xs text-neutral-400 mt-1">Bid {room.game?.bid.currentBid} · {bidderName}</div>

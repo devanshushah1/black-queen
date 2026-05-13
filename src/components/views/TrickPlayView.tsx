@@ -6,6 +6,7 @@ import { PlayerHand } from '@/components/play/PlayerHand';
 import { InfoBadges } from '@/components/play/InfoBadges';
 import { ChatPanel } from '@/components/ChatPanel';
 import { seatNameFor } from '@/components/shared/seatNameFor';
+import { MuteToggle } from '@/components/MuteToggle';
 import { cardKey } from '@/shared/types';
 
 interface Props {
@@ -70,6 +71,7 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
 
   return (
     <main className="min-h-screen relative bg-felt-900 p-6">
+      <MuteToggle />
       <InfoBadges game={game} bidderName={bidderName} partnerName={partnerName} />
 
       <div className="relative max-w-4xl mx-auto mt-6 h-[380px]">

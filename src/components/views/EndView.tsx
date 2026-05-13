@@ -5,6 +5,7 @@ import { Verdict } from '@/components/end/Verdict';
 import { TeamCard } from '@/components/end/TeamCard';
 import { ChatPanel } from '@/components/ChatPanel';
 import { seatNameFor } from '@/components/shared/seatNameFor';
+import { MuteToggle } from '@/components/MuteToggle';
 
 interface Props {
   room: RoomView;
@@ -22,6 +23,7 @@ export function EndView({ room, me, sessionId, onPlayAgain, onLeave, onSendChat 
   if (!results) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-6 gap-3">
+        <MuteToggle />
         <div className="text-gold-500 text-5xl font-serif">♛</div>
         <div className="text-lg text-neutral-300">Game complete — preparing results…</div>
       </main>
@@ -58,6 +60,7 @@ export function EndView({ room, me, sessionId, onPlayAgain, onLeave, onSendChat 
 
   return (
     <main className="min-h-screen p-6">
+      <MuteToggle />
       <div className="max-w-4xl mx-auto">
         <Verdict youWon={youWon} summary={summary} />
 
