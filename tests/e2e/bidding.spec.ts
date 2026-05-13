@@ -34,8 +34,8 @@ test('after start, every player sees 13 cards in their hand', async ({ browser }
   for (const page of pages) {
     // The HandPreview component renders 13 Card visuals (each with a rank corner). Count the
     // total number of card elements visible. Selector: any element with both `rounded-md` AND
-    // `bg-white` (the Card visual). Use a more specific selector that the implementation supports.
-    const cards = await page.locator('main >> .bg-white.rounded-md').count();
+    // the ivory card background (the Card visual).
+    const cards = await page.locator('main >> .bg-\\[\\#fafaf5\\].rounded-md').count();
     expect(cards).toBeGreaterThanOrEqual(13);
   }
 
