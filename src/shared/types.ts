@@ -43,6 +43,8 @@ export interface ClientToServerEvents {
   'room:leave':  () => void;
   'room:start':  (cb: (res: StartGameResult) => void) => void;
   'chat:send':   (payload: { text: string }) => void;
+  'bid:place':  (payload: { amount: number }, cb: (res: BidActionAck) => void) => void;
+  'bid:pass':   (cb: (res: BidActionAck) => void) => void;
 }
 
 /** Server → Client */
@@ -94,6 +96,36 @@ export function pointValue(card: Card): number {
 export function cardKey(card: Card): string {
   return `${card.rank}-${card.suit}`;
 }
+
+// =========================================================================
+// Bidding
+// =========================================================================
+
+export const MIN_BID = 75;
+export const MAX_BID = 150;
+export const BID_INCREMENT = 5;
+
+export type Seat = 1 | 2 | 3 | 4;
+
+export interface BidState {
+  /** Highest bid placed so far. Null until the first bid. */
+  currentBid: number | null;
+  /** Seat that holds the current high bid. Null if no bid yet. */
+  currentBidderSeat: Seat | null;
+  /** Seats that have passed at the CURRENT bid level. Reset on every new bid. */
+  passedSeats: Seat[];
+  /** True when bidding is finalized (3 non-bidders have passed at the current bid). */
+  complete: boolean;
+}
+
+export type BidActionResult =
+  | { ok: true; state: BidState; justCompleted: boolean }
+  | { ok: false; error: 'INVALID_AMOUNT' | 'NOT_HIGHER' | 'ALREADY_BIDDER' | 'NO_BID_TO_PASS' | 'NOT_IN_GAME' };
+
+/** Wire-format ack for bid:place and bid:pass. */
+export type BidActionAck =
+  | { ok: true }
+  | { ok: false; error: 'INVALID_AMOUNT' | 'NOT_HIGHER' | 'ALREADY_BIDDER' | 'NO_BID_TO_PASS' | 'NOT_IN_GAME' | 'NOT_IN_ROOM' };
 
 // =========================================================================
 // Constants
