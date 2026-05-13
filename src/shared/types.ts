@@ -49,8 +49,9 @@ export interface ClientToServerEvents {
 
 /** Server → Client */
 export interface ServerToClientEvents {
-  'room:state': (room: Room) => void;
+  'room:state': (view: RoomView) => void;
   'room:error': (payload: { code: 'NOT_FOUND' | 'FULL' | 'NAME_TAKEN' | 'NOT_HOST' | 'NEED_FOUR'; message: string }) => void;
+  'hand:update': (payload: { hand: Card[] }) => void;
 }
 
 /** Result of room:create. */
@@ -126,6 +127,28 @@ export type BidActionResult =
 export type BidActionAck =
   | { ok: true }
   | { ok: false; error: 'INVALID_AMOUNT' | 'NOT_HIGHER' | 'ALREADY_BIDDER' | 'NO_BID_TO_PASS' | 'NOT_IN_GAME' | 'NOT_IN_ROOM' };
+
+// =========================================================================
+// Game state (added to Room when phase moves past 'lobby')
+// =========================================================================
+
+export interface GameState {
+  bid: BidState;
+}
+
+/**
+ * Wire format sent to clients. Extends Room (public state) with optional `game`.
+ * No `hands` field — those are per-player private and emitted via hand:update.
+ */
+export interface RoomView extends Room {
+  game: GameState | null;
+}
+
+/** Server-internal: full Room state including private hands. */
+export interface RoomServerState extends RoomView {
+  /** Server-only. Each player's 13 cards. Never broadcast directly. */
+  hands: Record<Seat, Card[]> | null;
+}
 
 // =========================================================================
 // Constants

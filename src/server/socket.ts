@@ -4,6 +4,7 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
   Room,
+  RoomView,
 } from '@/shared/types';
 
 type SocketData = { sessionId?: string; roomCode?: string };
@@ -15,7 +16,8 @@ function roomChannel(code: string): string {
 }
 
 function broadcastState(io: Srv, room: Room): void {
-  io.to(roomChannel(room.code)).emit('room:state', room);
+  const view: RoomView = { ...room, game: null };
+  io.to(roomChannel(room.code)).emit('room:state', view);
 }
 
 export function attachSocketHandlers(io: Srv): void {
