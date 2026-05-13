@@ -4,6 +4,10 @@ import {
   type Player,
   type JoinRoomResult,
   type Seat,
+  type Card,
+  type Suit,
+  type CompletedTrick,
+  cardKey,
   MAX_NAME_LENGTH,
   MIN_NAME_LENGTH,
   MAX_PLAYERS,
@@ -12,6 +16,8 @@ import {
 import { createDeck, shuffle, deal } from './game/deck';
 import { emptyBidState, placeBid, passBid } from './game/bidding';
 import { toRoomView } from './game/view';
+import { validateTrumpPartnerChoice } from './game/trump-partner';
+import { startTrick, isLegalPlay, playCardInTrick, resolveTrick } from './game/trick';
 
 // In-memory store; process-local. Fine for single-instance hobby deploys.
 const rooms = new Map<string, RoomServerState>();
@@ -282,5 +288,105 @@ export function passBidInRoom(input: { code: string; seat: Seat }): BidInRoomRes
   if (res.justCompleted) {
     room.phase = 'trump_partner';
   }
+  return { ok: true, room };
+}
+
+type TrumpPartnerInRoomResult =
+  | { ok: true; room: RoomServerState }
+  | { ok: false; error: 'NOT_BIDDER' | 'INVALID_CARD' | 'OWN_CARD' | 'NOT_IN_GAME' };
+
+export function chooseTrumpPartnerInRoom(input: {
+  code: string;
+  seat: Seat;
+  trump: Suit;
+  calledCard: Card;
+}): TrumpPartnerInRoomResult {
+  const room = rooms.get(input.code);
+  if (!room || !room.game || room.phase !== 'trump_partner' || !room.hands) {
+    return { ok: false, error: 'NOT_IN_GAME' };
+  }
+  const bidderSeat = room.game.bid.currentBidderSeat;
+  if (bidderSeat === null || bidderSeat !== input.seat) {
+    return { ok: false, error: 'NOT_BIDDER' };
+  }
+
+  const v = validateTrumpPartnerChoice({
+    bidderSeat,
+    hands: room.hands,
+    trump: input.trump,
+    calledCard: input.calledCard,
+  });
+  if (!v.ok) return { ok: false, error: v.error };
+
+  room.game.trumpPartner = { trump: input.trump, calledCard: input.calledCard };
+  room.game.partnerSeat = v.partnerSeat;
+  room.game.currentTrick = startTrick(bidderSeat); // bidder leads first trick
+  room.phase = 'play';
+  return { ok: true, room };
+}
+
+type PlayCardInRoomResult =
+  | { ok: true; room: RoomServerState }
+  | { ok: false; error: 'NOT_YOUR_TURN' | 'NOT_IN_HAND' | 'MUST_FOLLOW_SUIT' | 'NOT_IN_GAME' };
+
+export function playCardInRoom(input: { code: string; seat: Seat; card: Card }): PlayCardInRoomResult {
+  const room = rooms.get(input.code);
+  if (
+    !room ||
+    !room.game ||
+    room.phase !== 'play' ||
+    !room.hands ||
+    !room.game.currentTrick ||
+    !room.game.trumpPartner
+  ) {
+    return { ok: false, error: 'NOT_IN_GAME' };
+  }
+
+  const trick = room.game.currentTrick;
+
+  // Whose turn? Clockwise from ledBy.
+  const nextSeatIndex = (trick.ledBy - 1 + trick.plays.length) % 4;
+  const expectedSeat = (nextSeatIndex + 1) as Seat;
+  if (input.seat !== expectedSeat) return { ok: false, error: 'NOT_YOUR_TURN' };
+
+  const hand = room.hands[input.seat];
+  const inHand = hand.some((c) => cardKey(c) === cardKey(input.card));
+  if (!inHand) return { ok: false, error: 'NOT_IN_HAND' };
+
+  if (!isLegalPlay(trick, hand, input.card)) {
+    return { ok: false, error: 'MUST_FOLLOW_SUIT' };
+  }
+
+  // Remove from hand and add to trick.
+  room.hands[input.seat] = hand.filter((c) => cardKey(c) !== cardKey(input.card));
+  const r = playCardInTrick(trick, input.seat, input.card);
+  if (!r.ok) return { ok: false, error: 'NOT_IN_GAME' }; // shouldn't happen
+  room.game.currentTrick = r.trick;
+
+  // Reveal partner if the called card just got played.
+  const called = room.game.trumpPartner.calledCard;
+  if (cardKey(input.card) === cardKey(called)) {
+    room.game.revealedPartnerSeat = input.seat;
+  }
+
+  // If trick complete, resolve and start next OR advance to end.
+  if (r.complete) {
+    const winnerSeat = resolveTrick(r.trick, room.game.trumpPartner.trump);
+    const finished: CompletedTrick = {
+      ledBy: r.trick.ledBy,
+      ledSuit: r.trick.ledSuit!,
+      plays: r.trick.plays,
+      winnerSeat,
+    };
+    room.game.completedTricks.push(finished);
+
+    if (room.game.completedTricks.length === 13) {
+      room.phase = 'end';
+      room.game.currentTrick = null;
+    } else {
+      room.game.currentTrick = startTrick(winnerSeat);
+    }
+  }
+
   return { ok: true, room };
 }
