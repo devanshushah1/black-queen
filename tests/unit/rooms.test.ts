@@ -3,6 +3,8 @@ import { generateRoomCode, createRoom, getRoom, _resetRoomsForTest } from '@/ser
 import { joinRoom } from '@/server/rooms';
 import { leaveRoom, postChat } from '@/server/rooms';
 import { startGame, setConnected } from '@/server/rooms';
+import { resumeInRoom } from '@/server/rooms';
+import { REPLACEMENT_WINDOW_MS } from '@/shared/types';
 
 beforeEach(() => _resetRoomsForTest());
 
@@ -264,5 +266,78 @@ describe('setConnected', () => {
   it('is a no-op if the session is not in the room', () => {
     const { room } = createRoom({ hostName: 'Dev' });
     expect(() => setConnected({ code: room.code, sessionId: 'unknown', connected: false })).not.toThrow();
+  });
+});
+
+describe('resumeInRoom', () => {
+  it('re-binds a disconnected player by sessionId', () => {
+    const { room, sessionId } = createRoom({ hostName: 'Dev' });
+    setConnected({ code: room.code, sessionId, connected: false });
+    expect(getRoom(room.code)?.players[0].connected).toBe(false);
+
+    const r = resumeInRoom({ code: room.code, sessionId });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.room.players[0].connected).toBe(true);
+    expect(r.room.players[0].disconnectedAt).toBeNull();
+  });
+
+  it('returns NOT_FOUND for unknown room', () => {
+    const r = resumeInRoom({ code: 'ZZZZ', sessionId: 'x' });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('NOT_FOUND');
+  });
+
+  it('returns REPLACED if sessionId not found in the (existing) room', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const r = resumeInRoom({ code: room.code, sessionId: 'fake' });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.error).toBe('REPLACED');
+  });
+});
+
+describe('joinRoom — replacement', () => {
+  it('a new joiner replaces a disconnected player past the window', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    const aman = joinRoom({ code: room.code, name: 'Aman' });
+    if (!aman.ok) throw new Error('precondition');
+
+    setConnected({ code: room.code, sessionId: aman.sessionId, connected: false });
+    // Force timestamp into the past
+    const live = getRoom(room.code);
+    if (!live) throw new Error('precondition');
+    const target = live.players.find((p) => p.id === aman.sessionId);
+    if (!target) throw new Error('precondition');
+    target.disconnectedAt = Date.now() - REPLACEMENT_WINDOW_MS - 1;
+
+    const sub = joinRoom({ code: room.code, name: 'Substitute' });
+    expect(sub.ok).toBe(true);
+    if (!sub.ok) return;
+    expect(sub.room.players).toHaveLength(4);
+    const seat4 = sub.room.players.find((p) => p.seat === 4);
+    expect(seat4?.name).toBe('Substitute');
+    expect(seat4?.id).toBe(sub.sessionId);
+    // The OLD sessionId is gone:
+    const old = resumeInRoom({ code: room.code, sessionId: aman.sessionId });
+    expect(old.ok).toBe(false);
+  });
+
+  it('does NOT allow replacement when within the window', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    const aman = joinRoom({ code: room.code, name: 'Aman' });
+    if (!aman.ok) throw new Error('precondition');
+
+    setConnected({ code: room.code, sessionId: aman.sessionId, connected: false });
+    // Recent disconnect (well within the window)
+    const sub = joinRoom({ code: room.code, name: 'Substitute' });
+    expect(sub.ok).toBe(false);
+    if (sub.ok) return;
+    expect(sub.error).toBe('FULL');
   });
 });

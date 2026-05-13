@@ -41,9 +41,13 @@ export function Seat({ player, seatLabel, isYou, isHost }: SeatProps) {
       >
         {isHost ? '★ host · ' : ''}{isYou ? 'you · ' : ''}{seatLabel}
       </div>
-      {!empty && !player.connected && (
-        <div className="mt-1 text-[10px] text-amber-400">Disconnected</div>
-      )}
+      {!empty && !player.connected && (() => {
+        const since = player.disconnectedAt ?? Date.now();
+        const replaceable = Date.now() - since >= 60_000;
+        return replaceable
+          ? <div className="mt-1 text-[10px] text-orange-300 italic">Open for replacement</div>
+          : <div className="mt-1 text-[10px] text-amber-400 animate-pulse">Reconnecting…</div>;
+      })()}
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   MIN_NAME_LENGTH,
   MAX_PLAYERS,
   ROOM_CODE_LENGTH,
+  REPLACEMENT_WINDOW_MS,
 } from '@/shared/types';
 import { createDeck, shuffle, deal } from './game/deck';
 import { emptyBidState, placeBid, passBid } from './game/bidding';
@@ -67,7 +68,7 @@ export interface CreateRoomOutput {
 export function createRoom(input: CreateRoomInput): CreateRoomOutput {
   const name = validateName(input.hostName);
   const hostId = randomUUID();
-  const host: Player = { id: hostId, name, seat: 1, connected: true };
+  const host: Player = { id: hostId, name, seat: 1, connected: true, disconnectedAt: null };
 
   const room: RoomServerState = {
     code: generateUniqueRoomCode(),
@@ -106,16 +107,41 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
     return { ok: false, error: 'NAME_INVALID' };
   }
 
+  // Replacement path: if room is full but a player is past the disconnect window,
+  // the new joiner takes that seat.
+  const now = Date.now();
+  const replaceable = room.players.find(
+    (p) => !p.connected && p.disconnectedAt !== null && now - p.disconnectedAt >= REPLACEMENT_WINDOW_MS,
+  );
   if (room.players.length >= MAX_PLAYERS) {
-    return { ok: false, error: 'FULL' };
+    if (!replaceable) return { ok: false, error: 'FULL' };
+    // Replace the disconnected player. New sessionId, new name; keep the seat.
+    // The replacement inherits any hand the disconnected player held.
+    if (room.players.some((p) => p !== replaceable && p.name.toLowerCase() === name.toLowerCase())) {
+      return { ok: false, error: 'NAME_TAKEN' };
+    }
+    const newId = randomUUID();
+    replaceable.id = newId;
+    replaceable.name = name;
+    replaceable.connected = true;
+    replaceable.disconnectedAt = null;
+    room.chat.push({
+      id: randomUUID(),
+      authorId: null,
+      authorName: null,
+      text: `${name} took an open seat`,
+      ts: Date.now(),
+    });
+    return { ok: true, sessionId: newId, room: toRoomView(room) };
   }
+
+  // Normal path (room not full)
   if (room.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
     return { ok: false, error: 'NAME_TAKEN' };
   }
-
   const seat = (room.players.length + 1) as 1 | 2 | 3 | 4;
   const id = randomUUID();
-  const player: Player = { id, name, seat, connected: true };
+  const player: Player = { id, name, seat, connected: true, disconnectedAt: null };
   room.players.push(player);
   room.chat.push({
     id: randomUUID(),
@@ -125,8 +151,6 @@ export function joinRoom(input: JoinRoomInput): JoinRoomResult {
     ts: Date.now(),
   });
 
-  // JoinRoomResult wire shape uses RoomView (public). Project through toRoomView so
-  // server-only fields like `hands` are stripped — never leak them on the wire.
   return { ok: true, sessionId: id, room: toRoomView(room) };
 }
 
@@ -260,6 +284,25 @@ export function setConnected(input: SetConnectedInput): void {
   const player = room.players.find((p) => p.id === input.sessionId);
   if (!player) return;
   player.connected = input.connected;
+  if (input.connected) {
+    player.disconnectedAt = null;
+  } else if (player.disconnectedAt === null) {
+    player.disconnectedAt = Date.now();
+  }
+}
+
+type ResumeInRoomResult =
+  | { ok: true; room: RoomServerState }
+  | { ok: false; error: 'NOT_FOUND' | 'REPLACED' };
+
+export function resumeInRoom(input: { code: string; sessionId: string }): ResumeInRoomResult {
+  const room = rooms.get(input.code);
+  if (!room) return { ok: false, error: 'NOT_FOUND' };
+  const player = room.players.find((p) => p.id === input.sessionId);
+  if (!player) return { ok: false, error: 'REPLACED' };
+  player.connected = true;
+  player.disconnectedAt = null;
+  return { ok: true, room };
 }
 
 type BidInRoomResult =

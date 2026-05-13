@@ -506,3 +506,41 @@ describe('socket: room:play-again', () => {
     c.disconnect();
   });
 });
+
+describe('socket: session:resume', () => {
+  it('resumes a disconnected client; ack returns room + hand:update is re-emitted', async () => {
+    const host = makeClient();
+    await new Promise<void>((r) => host.on('connect', () => r()));
+    const created: any = await new Promise((resolve) => host.emit('room:create', { name: 'Dev' }, resolve));
+    const sessionId = created.sessionId;
+    const code = created.room.code;
+    host.disconnect();
+
+    // wait a tick to ensure server registers the disconnect
+    await new Promise((r) => setTimeout(r, 50));
+
+    const reconnect = makeClient();
+    await new Promise<void>((r) => reconnect.on('connect', () => r()));
+    const ack: any = await new Promise((resolve) => reconnect.emit('session:resume', { sessionId, code }, resolve));
+    expect(ack.ok).toBe(true);
+    expect(ack.sessionId).toBe(sessionId);
+    expect(ack.room.players[0].connected).toBe(true);
+
+    reconnect.disconnect();
+  });
+
+  it('returns REPLACED for unknown sessionId', async () => {
+    const c = makeClient();
+    await new Promise<void>((r) => c.on('connect', () => r()));
+    const created: any = await new Promise((resolve) => c.emit('room:create', { name: 'Dev' }, resolve));
+
+    const c2 = makeClient();
+    await new Promise<void>((r) => c2.on('connect', () => r()));
+    const ack: any = await new Promise((resolve) => c2.emit('session:resume', { sessionId: 'fake', code: created.room.code }, resolve));
+    expect(ack.ok).toBe(false);
+    expect(ack.error).toBe('REPLACED');
+
+    c.disconnect();
+    c2.disconnect();
+  });
+});

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/client/useSocket';
 import { selectMe, useGameStore } from '@/client/store';
+import { saveSession, clearSession } from '@/client/session';
 import { JoinView } from '@/components/views/JoinView';
 import { WaitingRoomView } from '@/components/views/WaitingRoomView';
 import { BiddingView } from '@/components/views/BiddingView';
@@ -40,7 +41,11 @@ export default function RoomPage() {
     const res = await new Promise<JoinRoomResult>((resolve) =>
       socket.emit('room:join', { code, name }, resolve)
     );
-    if (res.ok) { setSession(res.sessionId); setRoom(res.room); }
+    if (res.ok) {
+      setSession(res.sessionId);
+      setRoom(res.room);
+      saveSession({ sessionId: res.sessionId, code });
+    }
     return res;
   }
   const handleStart = () => socket.emit('room:start', (res: StartGameResult) => { if (!res.ok) console.warn('Start failed:', res.error); });
@@ -72,6 +77,7 @@ export default function RoomPage() {
   };
   const handleLeave = () => {
     socket.emit('room:leave');
+    clearSession();
     reset();
     router.push('/');
   };
