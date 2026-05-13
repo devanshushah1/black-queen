@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { generateRoomCode, createRoom, getRoom, _resetRoomsForTest } from '@/server/rooms';
+import { joinRoom } from '@/server/rooms';
 
 beforeEach(() => _resetRoomsForTest());
 
@@ -45,5 +46,71 @@ describe('createRoom', () => {
       codes.add(createRoom({ hostName: `User${i}` }).room.code);
     }
     expect(codes.size).toBe(50);
+  });
+});
+
+describe('joinRoom', () => {
+  it('adds a second player into seat 2', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const res = joinRoom({ code: room.code, name: 'Sam' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.room.players).toHaveLength(2);
+    expect(res.room.players[1]).toMatchObject({ name: 'Sam', seat: 2, connected: true });
+  });
+
+  it('fills seats 2, 3, 4 in order', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    const res = joinRoom({ code: room.code, name: 'Aman' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const seats = res.room.players.map((p) => p.seat);
+    expect(seats).toEqual([1, 2, 3, 4]);
+  });
+
+  it('rejects an unknown room code with NOT_FOUND', () => {
+    const res = joinRoom({ code: 'ZZZZ', name: 'Sam' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('NOT_FOUND');
+  });
+
+  it('rejects when the room is full (4 players)', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    joinRoom({ code: room.code, name: 'Sam' });
+    joinRoom({ code: room.code, name: 'Riya' });
+    joinRoom({ code: room.code, name: 'Aman' });
+    const res = joinRoom({ code: room.code, name: 'Extra' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('FULL');
+  });
+
+  it('rejects duplicate names case-insensitively', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const res = joinRoom({ code: room.code, name: 'DEV' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('NAME_TAKEN');
+  });
+
+  it('rejects invalid names', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const res = joinRoom({ code: room.code, name: '' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.error).toBe('NAME_INVALID');
+  });
+
+  it('appends a system chat message on join', () => {
+    const { room } = createRoom({ hostName: 'Dev' });
+    const res = joinRoom({ code: room.code, name: 'Sam' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const last = res.room.chat[res.room.chat.length - 1];
+    expect(last.authorId).toBeNull();
+    expect(last.text).toMatch(/Sam joined/);
   });
 });

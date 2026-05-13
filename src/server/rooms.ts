@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import {
   type Room,
   type Player,
+  type JoinRoomResult,
   MAX_NAME_LENGTH,
+  MAX_PLAYERS,
   MIN_NAME_LENGTH,
   ROOM_CODE_LENGTH,
 } from '@/shared/types';
@@ -72,4 +74,42 @@ export function createRoom(input: CreateRoomInput): CreateRoomOutput {
 
 export function getRoom(code: string): Room | undefined {
   return rooms.get(code);
+}
+
+export interface JoinRoomInput {
+  code: string;
+  name: string;
+}
+
+export function joinRoom(input: JoinRoomInput): JoinRoomResult {
+  const room = rooms.get(input.code);
+  if (!room) return { ok: false, error: 'NOT_FOUND' };
+
+  let name: string;
+  try {
+    name = validateName(input.name);
+  } catch {
+    return { ok: false, error: 'NAME_INVALID' };
+  }
+
+  if (room.players.length >= MAX_PLAYERS) {
+    return { ok: false, error: 'FULL' };
+  }
+  if (room.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
+    return { ok: false, error: 'NAME_TAKEN' };
+  }
+
+  const seat = (room.players.length + 1) as 1 | 2 | 3 | 4;
+  const id = randomUUID();
+  const player: Player = { id, name, seat, connected: true };
+  room.players.push(player);
+  room.chat.push({
+    id: randomUUID(),
+    authorId: null,
+    authorName: null,
+    text: `${name} joined`,
+    ts: Date.now(),
+  });
+
+  return { ok: true, sessionId: id, room };
 }
