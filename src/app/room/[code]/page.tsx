@@ -4,6 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useSocket } from '@/client/useSocket';
 import { selectMe, useGameStore } from '@/client/store';
 import { saveSession, clearSession } from '@/client/session';
+import { resumeAudio } from '@/client/sounds';
 import { JoinView } from '@/components/views/JoinView';
 import { WaitingRoomView } from '@/components/views/WaitingRoomView';
 import { BiddingView } from '@/components/views/BiddingView';
@@ -38,6 +39,7 @@ export default function RoomPage() {
   const [tpBusy, setTpBusy] = useState(false);
 
   async function handleJoin(name: string): Promise<JoinRoomResult> {
+    resumeAudio();
     const res = await new Promise<JoinRoomResult>((resolve) =>
       socket.emit('room:join', { code, name }, resolve)
     );
@@ -48,7 +50,10 @@ export default function RoomPage() {
     }
     return res;
   }
-  const handleStart = () => socket.emit('room:start', (res: StartGameResult) => { if (!res.ok) console.warn('Start failed:', res.error); });
+  const handleStart = () => {
+    resumeAudio();
+    socket.emit('room:start', (res: StartGameResult) => { if (!res.ok) console.warn('Start failed:', res.error); });
+  };
   const handleSendChat = (text: string) => socket.emit('chat:send', { text });
   const handleBid = (amount: number) => {
     setBidBusy(true);
