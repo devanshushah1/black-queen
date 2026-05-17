@@ -1,6 +1,6 @@
-import { test, expect, type Browser, type Page, type BrowserContext } from '@playwright/test';
+import { test, expect, type Browser, type BrowserContext } from '@playwright/test';
 
-async function fourPlayerRoomReady(browser: Browser) {
+async function joinRoom(browser: Browser) {
   const contexts = await Promise.all(Array.from({ length: 4 }, () => browser.newContext()));
   const pages = await Promise.all(contexts.map((c: BrowserContext) => c.newPage()));
   const [host, g1, g2, g3] = pages;
@@ -17,6 +17,12 @@ async function fourPlayerRoomReady(browser: Browser) {
     await page.getByRole('button', { name: /Join room/i }).click();
   }
 
+  return { contexts, pages, host };
+}
+
+async function fourPlayerRoomReady(browser: Browser) {
+  const { contexts, pages, host } = await joinRoom(browser);
+
   await host.getByRole('button', { name: /^Start Game$/ }).click();
   for (const page of pages) {
     await expect(page.getByText(/Bidding phase/i)).toBeVisible();
@@ -25,9 +31,11 @@ async function fourPlayerRoomReady(browser: Browser) {
 }
 
 test('deal animation overlay appears then disappears', async ({ browser }) => {
-  const { contexts, host } = await fourPlayerRoomReady(browser);
+  const { contexts, host } = await joinRoom(browser);
 
-  await expect(host.getByTestId('deal-animation')).toBeVisible({ timeout: 1000 });
+  await host.getByRole('button', { name: /^Start Game$/ }).click();
+
+  await expect(host.getByTestId('deal-animation')).toBeVisible({ timeout: 3000 });
   await expect(host.getByTestId('deal-animation')).toHaveCount(0, { timeout: 5000 });
 
   await Promise.all(contexts.map((c: BrowserContext) => c.close()));
