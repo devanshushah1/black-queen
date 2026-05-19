@@ -23,37 +23,44 @@ export function BidPanel({ bid, yourSeat, busy, onBid, onPass }: BidPanelProps) 
   return (
     <div
       data-testid="bid-panel"
-      className="w-[360px] h-[290px] mx-auto bg-felt-900/95 border border-gold-500/40 rounded-2xl p-5 shadow-2xl flex flex-col"
+      className="w-[360px] h-[310px] mx-auto bg-black/45 backdrop-blur-xl border border-gold-500/35 rounded-2xl p-5 shadow-glass-gold flex flex-col justify-between transition-all duration-300"
     >
-      {/* Header: status + meta. Fixed height. */}
-      <div className="flex justify-between items-baseline mb-1">
-        <span className="text-[10px] uppercase tracking-widest text-gold-500 font-bold">● Bidding</span>
-        <span className="text-[10px] text-neutral-500">no timer · waits for passes</span>
+      {/* Header: status + meta */}
+      <div className="flex justify-between items-center mb-1">
+        <span className="text-[10px] uppercase tracking-widest text-gold-400 font-extrabold flex items-center gap-1.5 animate-pulse-slow">
+          <span className="h-1.5 w-1.5 rounded-full bg-gold-400" />
+          Auction Phase
+        </span>
+        <span className="text-[9px] uppercase tracking-wider text-neutral-400 font-medium">Wait for passes</span>
       </div>
 
-      {/* Current bid display. Fixed height of 60px regardless of state. */}
-      <div className="text-center h-[60px] flex flex-col justify-center">
+      {/* Current bid display */}
+      <div className="text-center h-[70px] flex flex-col justify-center bg-white/[0.02] border border-white/5 rounded-xl my-1 relative overflow-hidden">
+        {/* Subtle background glow */}
+        <div className="absolute inset-0 bg-gold-500/[0.01] pointer-events-none" />
+        
         {bid.currentBid === null ? (
           <>
-            <div className="text-4xl font-bold text-gold-500 leading-none">—</div>
-            <div className="text-xs text-neutral-400 mt-1">no bid yet · floor {MIN_BID}</div>
+            <div className="text-3xl font-extrabold text-white/40 font-serif leading-none">—</div>
+            <div className="text-[10px] uppercase tracking-wider text-neutral-400 mt-1">Floor: {MIN_BID} Points</div>
           </>
         ) : (
           <>
-            <div className="text-4xl font-bold text-gold-500 leading-none">{bid.currentBid}</div>
-            <div className="text-xs text-neutral-300 mt-1">
-              held by <b className={isCurrentBidder ? 'text-gold-500' : 'text-white'}>seat {bid.currentBidderSeat}</b>
+            <div className="text-4xl font-extrabold text-gold-400 font-serif leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+              {bid.currentBid}
+            </div>
+            <div className="text-[10px] uppercase tracking-wider text-neutral-300 mt-1.5">
+              Held by <span className={isCurrentBidder ? 'text-gold-300 font-extrabold' : 'text-white/80 font-bold'}>Seat {bid.currentBidderSeat}</span>
             </div>
           </>
         )}
       </div>
 
-      {/* Quick-bid grid: always 2×4 (or shorter if MAX_BID is close). Fixed height. */}
-      <div className={`grid grid-cols-4 grid-rows-2 gap-2 mt-2 ${youPassed ? 'opacity-30 pointer-events-none' : ''}`}>
+      {/* Quick-bid grid: always 2×4 */}
+      <div className={`grid grid-cols-4 grid-rows-2 gap-2 mt-1 ${youPassed ? 'opacity-25 pointer-events-none' : ''}`}>
         {Array.from({ length: 8 }).map((_, i) => {
           const amt = visibleAmounts[i];
           if (amt === undefined) {
-            // Reserve slot for layout stability when fewer than 8 bids remain.
             return <div key={`empty-${i}`} className="h-9" />;
           }
           const delta = bid.currentBid === null ? null : amt - bid.currentBid;
@@ -63,23 +70,27 @@ export function BidPanel({ bid, yourSeat, busy, onBid, onPass }: BidPanelProps) 
               type="button"
               disabled={busy}
               onClick={() => onBid(amt)}
-              className="bg-gradient-to-b from-felt-700 to-felt-800 hover:from-felt-800 hover:to-felt-900 hover:border-gold-500 border border-gold-500/25 text-white text-sm font-bold rounded-lg h-9 disabled:opacity-50"
+              className="relative overflow-hidden group bg-gradient-to-b from-[#1b362a] to-[#0e2118] hover:from-[#244b39] hover:to-[#143224] border border-gold-500/20 hover:border-gold-500 text-white text-xs font-bold rounded-lg h-9 transition-all duration-200 shadow-sm flex flex-col justify-center items-center"
             >
-              {delta !== null && <span className="block text-[9px] text-gold-500 font-medium leading-none">+{delta}</span>}
-              {amt}
+              {/* Gold button gloss sheen */}
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+              {delta !== null && (
+                <span className="text-[8px] text-gold-400 font-extrabold leading-none mb-0.5 tracking-tighter">+{delta}</span>
+              )}
+              <span className="text-white group-hover:text-gold-300 leading-none">{amt}</span>
             </button>
           );
         })}
       </div>
 
-      {/* Pass row: fixed height reserved either way. */}
-      <div className="mt-2 h-9">
+      {/* Pass row */}
+      <div className="mt-1 h-9">
         {bid.currentBid !== null && !isCurrentBidder ? (
           <button
             type="button"
             disabled={busy || youPassed}
             onClick={onPass}
-            className="w-full h-full bg-white/5 hover:bg-red-400/15 hover:border-red-400 border border-white/15 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+            className="w-full h-full bg-red-950/20 hover:bg-red-950/40 border border-red-500/20 hover:border-red-500/60 text-red-300 hover:text-red-200 rounded-lg text-xs font-bold transition-all duration-300 shadow-sm"
           >
             {youPassed ? 'Passed' : `Pass at ${bid.currentBid}`}
           </button>
@@ -87,7 +98,9 @@ export function BidPanel({ bid, yourSeat, busy, onBid, onPass }: BidPanelProps) 
       </div>
 
       {youPassed && (
-        <div className="text-center text-[11px] text-gold-500 mt-1">You passed. Waiting for others.</div>
+        <div className="text-center text-[10px] text-gold-400/90 font-bold uppercase tracking-widest animate-pulse mt-0.5">
+          You Passed · Waiting...
+        </div>
       )}
     </div>
   );

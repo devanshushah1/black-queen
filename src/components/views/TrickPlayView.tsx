@@ -165,29 +165,81 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
   }, [game.completedTricks.length, reduced]);
 
   return (
-    <main className="min-h-screen relative bg-felt-900 p-6">
+    <main className="min-h-screen relative bg-[#020b08] felt-grain p-6 overflow-hidden flex flex-col justify-between">
+      {/* Background ambient lighting */}
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-gold-500/[0.02] rounded-full filter blur-[120px] pointer-events-none" />
+      <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-felt-500/[0.03] rounded-full filter blur-[150px] pointer-events-none" />
+
       <MuteToggle />
       <InfoBadges game={game} bidderName={bidderName} partnerName={partnerName} />
 
       <LayoutGroup>
-        <div className="relative max-w-4xl mx-auto mt-6 h-[380px]">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
-            <OpponentFan count={opponentCardCount(room, layout.top as Seat)} orientation="top" />
-            <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.top)}</div>
-            {nextSeat === layout.top && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
-          </div>
-          <div className="absolute top-1/2 left-2 -translate-y-1/2 text-center">
-            <OpponentFan count={opponentCardCount(room, layout.left as Seat)} orientation="left" />
-            <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.left)}</div>
-            {nextSeat === layout.left && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
-          </div>
-          <div className="absolute top-1/2 right-2 -translate-y-1/2 text-center">
-            <OpponentFan count={opponentCardCount(room, layout.right as Seat)} orientation="right" />
-            <div className="text-xs font-semibold text-white mt-1">{seatNameFor(room.players, layout.right)}</div>
-            {nextSeat === layout.right && <div className="text-[10px] text-gold-500 animate-pulse">thinking…</div>}
+        {/* Card Table Area */}
+        <div className="relative max-w-4xl w-full mx-auto mt-6 h-[400px] flex items-center justify-center">
+          
+          {/* Luxury Mahogany Wood Oval Mat Backdrop */}
+          <div className="absolute w-[94%] h-[92%] rounded-[120px] border-[10px] border-double border-[#2a170d] bg-gradient-to-b from-[#0c5537] via-[#073523] to-[#03140e] shadow-[inset_0_12px_24px_rgba(0,0,0,0.7),0_20px_40px_rgba(0,0,0,0.9)] felt-grain pointer-events-none">
+            {/* Subtle center spotlight gold ring */}
+            <div className="absolute inset-8 rounded-[90px] border border-gold-500/10 pointer-events-none" />
+            
+            {/* Subtle table center crest */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none">
+              <svg className="w-48 h-48 text-gold-400" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C9 6.5 5.5 8.5 5.5 11.5c0 2.8 2.2 4.5 4.5 4.5.34 0 .67-.04.99-.11l-.49 2.94A1.5 1.5 0 0012 20.25a1.5 1.5 0 001.5-1.42l-.49-2.94c.32.07.65.11.99.11a4.5 4.5 0 004.5-4.5c0-3-3.5-5-6-9.5z" />
+              </svg>
+            </div>
           </div>
 
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+          {/* Top Opponent (North) */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 text-center z-20 transition-all duration-300">
+            <OpponentFan count={opponentCardCount(room, layout.top as Seat)} orientation="top" />
+            <div className="mt-1.5 flex flex-col items-center">
+              <div className="text-xs font-extrabold text-white/90 px-3 py-0.5 rounded-full bg-black/45 backdrop-blur-md border border-white/10 shadow-sm flex items-center gap-1.5">
+                {nextSeat === layout.top && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold-400 animate-ping" />
+                )}
+                {seatNameFor(room.players, layout.top)}
+              </div>
+              {nextSeat === layout.top && (
+                <div className="text-[9px] uppercase tracking-widest text-gold-400 font-extrabold mt-0.5 animate-pulse">thinking…</div>
+              )}
+            </div>
+          </div>
+
+          {/* Left Opponent (West) */}
+          <div className="absolute top-1/2 left-3 -translate-y-1/2 text-center z-20 transition-all duration-300">
+            <OpponentFan count={opponentCardCount(room, layout.left as Seat)} orientation="left" />
+            <div className="mt-2 flex flex-col items-center">
+              <div className="text-xs font-extrabold text-white/90 px-3 py-0.5 rounded-full bg-black/45 backdrop-blur-md border border-white/10 shadow-sm flex items-center gap-1.5">
+                {nextSeat === layout.left && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold-400 animate-ping" />
+                )}
+                {seatNameFor(room.players, layout.left)}
+              </div>
+              {nextSeat === layout.left && (
+                <div className="text-[9px] uppercase tracking-widest text-gold-400 font-extrabold mt-0.5 animate-pulse">thinking…</div>
+              )}
+            </div>
+          </div>
+
+          {/* Right Opponent (East) */}
+          <div className="absolute top-1/2 right-3 -translate-y-1/2 text-center z-20 transition-all duration-300">
+            <OpponentFan count={opponentCardCount(room, layout.right as Seat)} orientation="right" />
+            <div className="mt-2 flex flex-col items-center">
+              <div className="text-xs font-extrabold text-white/90 px-3 py-0.5 rounded-full bg-black/45 backdrop-blur-md border border-white/10 shadow-sm flex items-center gap-1.5">
+                {nextSeat === layout.right && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-gold-400 animate-ping" />
+                )}
+                {seatNameFor(room.players, layout.right)}
+              </div>
+              {nextSeat === layout.right && (
+                <div className="text-[9px] uppercase tracking-widest text-gold-400 font-extrabold mt-0.5 animate-pulse">thinking…</div>
+              )}
+            </div>
+          </div>
+
+          {/* Played Cards Center Mat */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
             {animatingTrick && collectPhase !== 'collect' && (
               <PlayedCardsCenter
                 plays={animatingTrick.plays}
@@ -204,16 +256,32 @@ export function TrickPlayView({ room, me, yourHand, onPlay, onSendChat }: Props)
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto mt-4">
-          <div className="text-[10px] uppercase tracking-widest text-neutral-500 text-center mb-1">
-            {isMyTurn ? <span className="text-gold-500">Your turn</span> : 'Waiting…'}
+        {/* Player Controls & Hand Area */}
+        <div className="max-w-4xl w-full mx-auto mt-4 z-20 select-none">
+          <div className="text-[10px] uppercase tracking-widest text-neutral-400 text-center mb-2 font-extrabold">
+            {isMyTurn ? (
+              <span className="text-gold-400 flex items-center justify-center gap-1.5 animate-pulse">
+                <span className="h-1.5 w-1.5 rounded-full bg-gold-400" />
+                Your turn
+              </span>
+            ) : (
+              'Waiting…'
+            )}
           </div>
           <PlayerHand hand={yourHand} legalKeys={legalKeys} active={isMyTurn} onPlay={onPlay} />
-          <div className="text-center mt-2 text-xs text-white font-semibold">{me.name} (you)</div>
+          
+          <div className="text-center mt-3">
+            <span className="inline-block text-sm font-extrabold text-white/95 px-4 py-1 rounded-full bg-gold-500/[0.08] border border-gold-500/30 shadow-glass-gold">
+              {me.name} (You)
+            </span>
+          </div>
         </div>
       </LayoutGroup>
 
-      <div className="fixed bottom-3 right-3"><ChatPanel messages={room.chat} onSend={onSendChat} /></div>
+      {/* Glassmorphic Floating Chat Widget */}
+      <div className="fixed bottom-4 right-4 z-40">
+        <ChatPanel messages={room.chat} onSend={onSendChat} />
+      </div>
     </main>
   );
 }

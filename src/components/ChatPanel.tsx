@@ -12,7 +12,7 @@ export function ChatPanel({ messages, onSend }: ChatPanelProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages.length]);
 
   function handleSubmit(e: React.FormEvent) {
@@ -24,29 +24,50 @@ export function ChatPanel({ messages, onSend }: ChatPanelProps) {
   }
 
   return (
-    <div className="w-52 bg-black/50 border border-white/15 rounded-lg p-2.5 text-xs">
-      <div ref={scrollRef} className="flex flex-col gap-0.5 max-h-32 overflow-y-auto pr-1">
-        {messages.map((m) => (
-          <div key={m.id}>
-            {m.authorName ? (
-              <span>
-                <b className="text-gold-500">{m.authorName}:</b> {m.text}
-              </span>
-            ) : (
-              <span className="text-neutral-500 italic">{m.text}</span>
-            )}
-          </div>
-        ))}
+    <div className="w-56 bg-black/45 backdrop-blur-md border border-white/10 rounded-xl p-3 text-xs shadow-glass select-none transition-all duration-300">
+      <div className="text-[10px] uppercase tracking-widest text-gold-400 font-extrabold mb-1.5 opacity-85">
+        Lounge Chat
       </div>
-      <form onSubmit={handleSubmit} className="mt-1.5">
+      
+      <div 
+        ref={scrollRef} 
+        className="flex flex-col gap-1 max-h-36 overflow-y-auto pr-1 mb-2 scrollbar-thin"
+      >
+        {messages.length === 0 ? (
+          <div className="text-neutral-500 italic text-[11px] py-1 text-center">No messages yet...</div>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} className="leading-snug break-words py-0.5">
+              {m.authorName ? (
+                <span>
+                  <b className="text-gold-400 font-bold mr-1">{m.authorName}:</b>
+                  <span className="text-white/80">{m.text}</span>
+                </span>
+              ) : (
+                <span className="text-neutral-500 italic text-[11px]">{m.text}</span>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      <form onSubmit={handleSubmit} className="relative mt-2">
         <input
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           maxLength={200}
-          placeholder="Type a message…"
-          className="w-full bg-white/10 border border-white/20 rounded px-2 py-1 text-xs outline-none focus:border-gold-500"
+          placeholder="Send a whisper…"
+          className="w-full bg-white/[0.05] border border-white/10 focus:border-gold-500/80 focus:bg-white/[0.08] text-white rounded-lg px-2.5 py-1.5 text-xs outline-none transition-all duration-300 placeholder-white/30"
         />
+        <button 
+          type="submit" 
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gold-400 hover:text-gold-300 transition-colors"
+        >
+          <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+          </svg>
+        </button>
       </form>
     </div>
   );
