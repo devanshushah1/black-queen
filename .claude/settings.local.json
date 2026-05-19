@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/Users/devanshu/.claude/plugins/cache/claude-plugins-official/superpowers/5.1.0/skills/brainstorming/scripts/start-server.sh *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:56027/)",
+      "Bash(curl -s http://localhost:56027/)",
+      "Bash(xargs ls -la)",
+      "Bash(sort -k5 -n)"
+    ]
+  }
+}
