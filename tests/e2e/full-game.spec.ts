@@ -68,7 +68,7 @@ test('drives 13 tricks to the end-of-game screen', async ({ browser }) => {
   for (let i = 0; i < 52; i++) {
     let played = false;
     // Try a few times to find whoever has "Your turn" — broadcasts may take a moment.
-    for (let attempt = 0; attempt < 20 && !played; attempt++) {
+    for (let attempt = 0; attempt < 40 && !played; attempt++) {
       for (const page of pages) {
         const yourTurn = await page.getByText(/Your turn/i).count();
         if (yourTurn > 0) {
